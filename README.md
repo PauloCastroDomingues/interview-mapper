@@ -35,7 +35,7 @@ Importante: variáveis começando com `NEXT_PUBLIC_` ficam visíveis no navegado
 
 | Camada    | Tecnologia                      |
 |-----------|---------------------------------|
-| Frontend  | Next.js 14 + Tailwind CSS       |
+| Frontend  | Next.js 16 + Tailwind CSS       |
 | Armazenamento | `localStorage` (padrão) + Google Sheets gratuito (opcional) |
 | Backend   | Google Apps Script (opcional)   |
 | Hosting   | Vercel                          |
@@ -45,7 +45,7 @@ Importante: variáveis começando com `NEXT_PUBLIC_` ficam visíveis no navegado
 
 ## Pré-requisitos
 
-- **Node.js** 18+ → [nodejs.org](https://nodejs.org)
+- **Node.js** 20.9+ → [nodejs.org](https://nodejs.org)
 - **npm** (vem com o Node)
 - **VS Code** → [code.visualstudio.com](https://code.visualstudio.com)
 - Conta na **Vercel** → [vercel.com](https://vercel.com)
