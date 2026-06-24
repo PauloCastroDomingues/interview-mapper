@@ -1,4 +1,5 @@
 import './globals.css'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata = {
   title: 'Interview Mapper - Mapeamento de Processos',
@@ -10,6 +11,7 @@ export default function RootLayout({ children }) {
     <html lang="pt-BR">
       <body className="min-h-screen bg-[#f5f7fb] text-gray-900 antialiased">
         {children}
+        <Analytics />
       </body>
     </html>
   )
