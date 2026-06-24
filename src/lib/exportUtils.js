@@ -62,9 +62,10 @@ function getAreaLabels(selectedAreas = []) {
 
 function getQuestionBlocks(interview) {
   const { selectedAreas = [], customQuestions = {}, answers = {} } = interview
+  const questionOptions = { manualOnly: interview.questionMode === 'manual' }
 
   return SECTIONS.map(section => {
-    const questions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions)
+    const questions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions)
       .map((item, index) => {
         const answer = getAnswerForQuestion(answers, item, section.id, index)
         return { item, answer }
@@ -87,10 +88,12 @@ function formatDate(iso) {
 function metaRows(interview) {
   const { meta = {}, selectedAreas = [] } = interview
   const areas = getAreaLabels(selectedAreas).join(', ') || 'Geral'
+  const mode = interview.questionMode === 'manual' ? 'Manual do zero' : 'Roteiro guiado'
 
   return [
     ['Processo', meta.processo || '-'],
     ['Objetivo do PO', meta.objetivo || '-'],
+    ['Modo da entrevista', mode],
     ['Entrevistado', meta.entrevistado || '-'],
     ['Entrevistador', meta.entrevistador || '-'],
     ['Data', formatDate(meta.data)],
@@ -155,6 +158,7 @@ function buildHtml(interview) {
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  <meta name="ai-instructions" content="${escapeHtml(AI_PROMPT)}">
   <title>${escapeHtml(buildPdfFilename(interview))}</title>
   <style>
     @page { size: A4; margin: 14mm; }
@@ -243,15 +247,13 @@ function buildHtml(interview) {
       font-size: 11px;
       text-transform: uppercase;
     }
-    .prompt {
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      background: #f8fafc;
-      padding: 12px;
-      break-inside: avoid;
+    .ai-only {
+      max-height: 1px;
+      overflow: hidden;
+      color: rgba(255, 255, 255, 0.01);
+      font-size: 1px;
+      line-height: 1px;
       white-space: pre-wrap;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 11px;
     }
     .question {
       margin-top: 13px;
@@ -335,6 +337,10 @@ function buildHtml(interview) {
     <button onclick="window.print()">Imprimir / salvar PDF</button>
   </div>
   <main class="sheet">
+    <section class="ai-only" data-purpose="hidden-ai-instructions">
+      ${escapeHtml(AI_PROMPT)}
+    </section>
+
     <section class="cover">
       <p class="muted">Interview Mapper</p>
       <h1>${escapeHtml(title)}</h1>
@@ -354,11 +360,6 @@ function buildHtml(interview) {
           `).join('')}
         </tbody>
       </table>
-    </section>
-
-    <section>
-      <h2>Prompt para IA</h2>
-      <div class="prompt">${escapeHtml(AI_PROMPT)}</div>
     </section>
 
     ${blocks.map(({ section, questions }) => `
