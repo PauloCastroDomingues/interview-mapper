@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.2.0`
+**Versão atual:** `v1.3.0`
 
-Esta versão transforma o app em um workspace mais completo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, autosave local, legendas por print e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais completo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, autosave local, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -16,6 +16,7 @@ Esta versão transforma o app em um workspace mais completo para Product Owners:
 - **Perguntas específicas por área** — ativadas com chips de seleção e orientadas para documentação de PO
 - **Perguntas personalizadas** — crie perguntas próprias dentro de cada seção da entrevista
 - **Prints/imagens com legenda** — anexe, arraste ou cole imagens e descreva o que cada evidência comprova
+- **Transcrição manual gratuita** — cole a transcrição do áudio, destaque pontos-chave e referencie arquivos sem fazer upload pesado
 - **Autosave local** — rascunhos são salvos automaticamente no navegador sem disparar sync remoto a cada digitação
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
@@ -30,6 +31,8 @@ O projeto foi pensado para uso pessoal sem custo:
 - Por padrão, tudo funciona no navegador usando `localStorage`.
 - O Google Sheets é opcional e serve como backup/sync gratuito via Google Apps Script.
 - Os prints/imagens ficam completos apenas no navegador local. No Google Sheets são enviados apenas os nomes das imagens, para evitar limite de célula e manter o sync leve.
+- O áudio original não é enviado nem armazenado pelo app. A entrevista guarda apenas transcrição em texto e metadados dos arquivos referenciados.
+- Para transcrever sem custo recorrente, use uma ferramenta local/gratuita fora do app e cole o texto no bloco **Transcrição da entrevista**.
 - A Vercel pode hospedar o app no plano gratuito para uso pessoal.
 - Se publicar o app, configure usuário e senha por variáveis de ambiente para evitar acesso público às entrevistas.
 
@@ -234,14 +237,30 @@ O prompt orienta a IA a analisar o material como Product Owner sênior e entrega
 4. Regras de negócio, exceções, SLAs, thresholds e aprovações
 5. Dados, integrações, fontes de verdade e restrições de acesso
 6. Leitura das evidências visuais anexadas
-7. Riscos classificados por impacto, probabilidade, evidência e mitigação
-8. Oportunidades priorizadas por impacto, esforço e urgência
-9. Backlog sugerido com histórias de usuário e critérios de aceite
-10. Perguntas em aberto e próximos passos para o PO
+7. Evidências vindas da transcrição e pontos que precisam de confirmação
+8. Riscos classificados por impacto, probabilidade, evidência e mitigação
+9. Oportunidades priorizadas por impacto, esforço e urgência
+10. Backlog sugerido com histórias de usuário e critérios de aceite
+11. Perguntas em aberto e próximos passos para o PO
 
 ---
 
-## 7. Extensões recomendadas para VS Code
+## 7. Fluxo gratuito para áudio
+
+O app não transcreve áudio via API paga. O fluxo gratuito recomendado é:
+
+1. Grave a entrevista no celular, Teams, Meet, Zoom ou ferramenta de preferência.
+2. Transcreva fora do app usando uma opção gratuita/local.
+3. Cole o texto no bloco **Transcrição da entrevista**.
+4. Use **Pontos-chave**, **Decisões citadas** e **Dúvidas da transcrição** para limpar o material.
+5. Adicione o arquivo de áudio como referência. O app salva apenas nome, tipo e tamanho, mantendo o arquivo original fora do sistema.
+6. Exporte o PDF. A IA receberá perguntas, respostas, síntese, prints e transcrição em um único dossiê.
+
+Esse desenho mantém o projeto sem custo de infraestrutura, evita upload de arquivos sensíveis e deixa o PDF mais forte para análise por IA.
+
+---
+
+## 8. Extensões recomendadas para VS Code
 
 Crie `.vscode/extensions.json` com:
 ```json
