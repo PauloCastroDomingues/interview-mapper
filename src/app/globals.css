@@ -4,8 +4,25 @@
 
 * { box-sizing: border-box; }
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
 textarea, input, select {
   font-family: inherit;
+}
+
+button, input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #bae6fd;
+  color: #0f172a;
 }
 
 .line-clamp-2 {
@@ -13,4 +30,10 @@ textarea, input, select {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
 }

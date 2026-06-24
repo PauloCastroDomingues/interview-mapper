@@ -1,25 +1,59 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { SECTIONS, AREAS, getAllQuestionsForSection, getAnswerForQuestion, migrateAnswerKeys } from '@/lib/questions'
+import {
+  SECTIONS,
+  AREAS,
+  getAllQuestionsForSection,
+  getAnswerForQuestion,
+  makeCustomQuestion,
+  migrateAnswerKeys,
+  normalizeCustomQuestions,
+} from '@/lib/questions'
 import { saveInterview } from '@/lib/storage'
-import { generateExportText, downloadText, buildFilename } from '@/lib/exportUtils'
+import { exportInterviewPdf } from '@/lib/exportUtils'
 import QuestionCard from './QuestionCard'
 
-const EMPTY_META    = { entrevistado: '', entrevistador: '', data: new Date().toISOString().split('T')[0], duracao: '45 minutos' }
-const EMPTY_SUMMARY = { descobertas: '', riscos: '', oportunidades: '', duvidas: '', passos: '' }
+const EMPTY_META = {
+  processo: '',
+  objetivo: '',
+  entrevistado: '',
+  entrevistador: '',
+  data: new Date().toISOString().split('T')[0],
+  duracao: '45 minutos',
+}
+
+const EMPTY_SUMMARY = {
+  descobertas: '',
+  riscos: '',
+  oportunidades: '',
+  duvidas: '',
+  passos: '',
+}
+
+const EMPTY_CUSTOM_DRAFT = { q: '', hint: '' }
 
 export default function InterviewForm({ initialData, onSave, onCancel }) {
   const editing = !!initialData?.id
-  const initialAnswers = migrateAnswerKeys(initialData?.selectedAreas || [], initialData?.answers || {})
+  const initialCustomQuestions = normalizeCustomQuestions(initialData?.customQuestions || {})
+  const initialAnswers = migrateAnswerKeys(
+    initialData?.selectedAreas || [],
+    initialData?.answers || {},
+    initialCustomQuestions
+  )
 
-  const [meta,          setMeta]    = useState(initialData?.meta    || EMPTY_META)
-  const [selectedAreas, setAreas]   = useState(initialData?.selectedAreas || [])
+  const [meta, setMeta] = useState({ ...EMPTY_META, ...(initialData?.meta || {}) })
+  const [selectedAreas, setAreas] = useState(initialData?.selectedAreas || [])
   const [activeSection, setSection] = useState(0)
-  const [answers,       setAnswers] = useState(initialAnswers)
-  const [summary,       setSummary] = useState(initialData?.summary || EMPTY_SUMMARY)
-  const [saved,         setSaved]   = useState(false)
-  const [saving,        setSaving]  = useState(false)
-  const [error,         setError]   = useState('')
+  const [answers, setAnswers] = useState(initialAnswers)
+  const [customQuestions, setCustomQuestions] = useState(initialCustomQuestions)
+  const [customDraft, setCustomDraft] = useState(EMPTY_CUSTOM_DRAFT)
+  const [summary, setSummary] = useState({ ...EMPTY_SUMMARY, ...(initialData?.summary || {}) })
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const currentSection = SECTIONS[activeSection]
+  const questions = getAllQuestionsForSection(currentSection.id, selectedAreas, customQuestions)
 
   function toggleArea(id) {
     setAreas(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
@@ -29,22 +63,67 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     setAnswers(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  // Progress
-  const totalQ = SECTIONS.reduce((acc, s) => acc + getAllQuestionsForSection(s.id, selectedAreas).length, 0)
-  const doneQ  = SECTIONS.reduce((acc, s) => {
-    return acc + getAllQuestionsForSection(s.id, selectedAreas).filter((item, qi) => {
-      const ans = getAnswerForQuestion(answers, item, s.id, qi)
+  function getSectionStats(section) {
+    const sectionQuestions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions)
+    const answered = sectionQuestions.filter((item, qi) => {
+      const ans = getAnswerForQuestion(answers, item, section.id, qi)
       return ans?.text?.trim() || ans?.images?.length > 0
     }).length
-  }, 0)
+
+    return { total: sectionQuestions.length, answered }
+  }
+
+  const totalQ = SECTIONS.reduce((acc, s) => acc + getSectionStats(s).total, 0)
+  const doneQ = SECTIONS.reduce((acc, s) => acc + getSectionStats(s).answered, 0)
   const pct = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0
 
+  function addCustomQuestion() {
+    if (!customDraft.q.trim()) {
+      setError('Digite a pergunta personalizada antes de adicionar.')
+      return
+    }
+
+    const question = makeCustomQuestion(currentSection.id, customDraft.q, customDraft.hint)
+    setCustomQuestions(prev => ({
+      ...prev,
+      [currentSection.id]: [...(prev[currentSection.id] || []), question],
+    }))
+    setAnswers(prev => ({ ...prev, [question.id]: { text: '', images: [] } }))
+    setCustomDraft(EMPTY_CUSTOM_DRAFT)
+    setError('')
+  }
+
+  function updateCustomQuestion(sectionId, questionId, patch) {
+    setCustomQuestions(prev => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] || []).map(item => (
+        item.id === questionId ? { ...item, ...patch } : item
+      )),
+    }))
+  }
+
+  function removeCustomQuestion(sectionId, questionId) {
+    setCustomQuestions(prev => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] || []).filter(item => item.id !== questionId),
+    }))
+    setAnswers(prev => {
+      const next = { ...prev }
+      delete next[questionId]
+      return next
+    })
+  }
+
   function buildInterview() {
+    const cleanCustomQuestions = normalizeCustomQuestions(customQuestions)
+    const cleanAnswers = migrateAnswerKeys(selectedAreas, answers, cleanCustomQuestions)
+
     return {
       ...(initialData || {}),
       meta,
       selectedAreas,
-      answers: migrateAnswerKeys(selectedAreas, answers),
+      customQuestions: cleanCustomQuestions,
+      answers: cleanAnswers,
       summary,
       stats: {
         totalQuestions: totalQ,
@@ -74,188 +153,279 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   }
 
   function handleExport() {
-    const interview = buildInterview()
-    const text = generateExportText(interview)
-    downloadText(buildFilename(interview), text)
+    try {
+      exportInterviewPdf(buildInterview())
+    } catch (err) {
+      setError(err.message || 'Não foi possível preparar o PDF.')
+    }
   }
 
-  const currentSection = SECTIONS[activeSection]
-  const questions      = getAllQuestionsForSection(currentSection.id, selectedAreas)
+  const areaLabels = selectedAreas
+    .map(id => AREAS.find(a => a.id === id)?.label)
+    .filter(Boolean)
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-
-      {/* Meta fields */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dados da entrevista</p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            ['Entrevistado', 'entrevistado', 'text',   'Nome e cargo'],
-            ['Entrevistador','entrevistador','text',   'Seu nome'],
-            ['Data',         'data',         'date',   ''],
-            ['Duração',      'duracao',      'select', ''],
-          ].map(([label, field, type, ph]) => (
-            <div key={field}>
-              <label className="text-[11px] text-gray-400 block mb-1">{label}</label>
-              {type === 'select' ? (
-                <select
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400"
-                  value={meta[field]}
-                  onChange={e => setMeta(m => ({ ...m, [field]: e.target.value }))}
-                >
-                  {['30 minutos','45 minutos','60 minutos','90 minutos'].map(o => <option key={o}>{o}</option>)}
-                </select>
-              ) : (
-                <input
-                  type={type}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400"
-                  placeholder={ph}
-                  value={meta[field]}
-                  onChange={e => setMeta(m => ({ ...m, [field]: e.target.value }))}
-                />
-              )}
-            </div>
-          ))}
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <section className="mb-5 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Dossiê de entrevista</p>
+            <h1 className="mt-1 text-xl font-semibold text-gray-950">
+              {meta.processo || 'Mapeamento de processo'}
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+            <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">{doneQ}/{totalQ} respostas</span>
+            <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">{pct}% completo</span>
+          </div>
         </div>
-      </div>
 
-      {/* Area chips */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Área do entrevistado</p>
-        <div className="flex flex-wrap gap-2">
-          {AREAS.map(a => (
-            <button
-              key={a.id}
-              onClick={() => toggleArea(a.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all
-                ${selectedAreas.includes(a.id)
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs text-gray-400">{doneQ} de {totalQ} perguntas respondidas</span>
-          <span className="text-xs font-semibold text-blue-600">{pct}%</span>
-        </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-
-      {/* Section tabs */}
-      <div className="border-b border-gray-200 flex gap-0 overflow-x-auto">
-        {SECTIONS.map((s, i) => {
-          const sq = getAllQuestionsForSection(s.id, selectedAreas)
-          const sd = sq.filter((item, qi) => {
-            const ans = getAnswerForQuestion(answers, item, s.id, qi)
-            return ans?.text?.trim() || ans?.images?.length > 0
-          }).length
-          return (
-            <button
-              key={s.id}
-              onClick={() => setSection(i)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors
-                ${activeSection === i
-                  ? 'border-blue-600 text-blue-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-            >
-              <span>{s.icon}</span> {s.label}
-              {sd > 0 && (
-                <span className="bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold">{sd}</span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Section desc */}
-      <p className="text-xs text-gray-500 bg-gray-50 border-l-2 border-blue-300 pl-3 py-2 rounded-r-lg">
-        {currentSection.desc}
-        {selectedAreas.length > 0 && (() => {
-          const extra = questions.filter(q => q.isArea).length
-          return extra > 0 ? <span className="text-amber-600 font-medium"> +{extra} pergunta{extra > 1 ? 's' : ''} específica{extra > 1 ? 's' : ''} da área.</span> : null
-        })()}
-      </p>
-
-      {/* Questions */}
-      <div className="space-y-3">
-        {questions.map((item, qi) => (
-          <QuestionCard
-            key={`${currentSection.id}-${qi}`}
-            num={qi + 1}
-            question={item.q}
-            hint={item.hint}
-            isArea={item.isArea}
-            areaLabel={item.areaLabel}
-            answerKey={item.id}
-            answer={getAnswerForQuestion(answers, item, currentSection.id, qi)}
-            onChange={handleAnswer}
-          />
-        ))}
-      </div>
-
-      {/* Summary */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">📝 Resumo pós-entrevista</p>
-        </div>
-        {[
-          ['🎯 Principais descobertas', 'descobertas', 'Principais aprendizados sobre o processo...'],
-          ['⚠️  Riscos identificados',  'riscos',       'Pontos frágeis ou críticos encontrados...'],
-          ['💡 Oportunidades',          'oportunidades','Melhorias e automações identificadas...'],
-          ['❓ Dúvidas em aberto',      'duvidas',      'O que ainda precisa ser esclarecido...'],
-          ['👣 Próximos passos',        'passos',       'Ações acordadas e responsáveis...'],
-        ].map(([label, field, ph]) => (
-          <div key={field} className="grid grid-cols-[160px_1fr] border-b border-gray-100 last:border-b-0">
-            <div className="px-4 py-3 flex items-start text-xs font-medium text-gray-600 bg-gray-50 border-r border-gray-100">
-              {label}
-            </div>
-            <textarea
-              className="text-sm text-gray-700 px-3 py-2.5 min-h-[64px] resize-y focus:outline-none placeholder:text-gray-300 bg-white"
-              placeholder={ph}
-              value={summary[field]}
-              onChange={e => setSummary(s => ({ ...s, [field]: e.target.value }))}
+        <div className="grid gap-3 lg:grid-cols-[1.2fr_1.2fr_.8fr_.8fr_.7fr_.7fr]">
+          <div className="lg:col-span-2">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Processo mapeado</label>
+            <input
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              placeholder="Ex: Onboarding B2B, régua de retenção, conciliação financeira"
+              value={meta.processo}
+              onChange={e => setMeta(m => ({ ...m, processo: e.target.value }))}
             />
           </div>
-        ))}
-      </div>
+          <div className="lg:col-span-2">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Objetivo do PO</label>
+            <input
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              placeholder="O que precisa sair documentado ou decidido?"
+              value={meta.objetivo}
+              onChange={e => setMeta(m => ({ ...m, objetivo: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Entrevistado</label>
+            <input
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              placeholder="Nome e cargo"
+              value={meta.entrevistado}
+              onChange={e => setMeta(m => ({ ...m, entrevistado: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Entrevistador</label>
+            <input
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              placeholder="Seu nome"
+              value={meta.entrevistador}
+              onChange={e => setMeta(m => ({ ...m, entrevistador: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Data</label>
+            <input
+              type="date"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              value={meta.data}
+              onChange={e => setMeta(m => ({ ...m, data: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Duração</label>
+            <select
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              value={meta.duracao}
+              onChange={e => setMeta(m => ({ ...m, duracao: e.target.value }))}
+            >
+              {['30 minutos', '45 minutos', '60 minutos', '90 minutos', '120 minutos'].map(option => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
 
-      {/* Actions */}
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
+      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Progresso</p>
+              <p className="text-sm font-semibold text-gray-900">{pct}%</p>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full rounded-full bg-sky-500 transition-all duration-300" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">{doneQ} de {totalQ} perguntas respondidas</p>
+          </section>
 
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
-        >
-          {saving ? 'Salvando...' : saved ? '✓ Salvo!' : editing ? '💾 Atualizar' : '💾 Salvar entrevista'}
-        </button>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 border border-gray-200 hover:border-blue-300 text-gray-600 hover:text-blue-700 text-sm px-4 py-2.5 rounded-lg transition-colors"
-        >
-          ⬇ Exportar
-        </button>
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="text-sm text-gray-400 hover:text-gray-700 px-3 py-2.5"
-          >
-            Cancelar
-          </button>
-        )}
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Área do entrevistado</p>
+            <div className="flex flex-wrap gap-2">
+              {AREAS.map(area => (
+                <button
+                  type="button"
+                  key={area.id}
+                  onClick={() => toggleArea(area.id)}
+                  className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                    selectedAreas.includes(area.id)
+                      ? 'border-sky-600 bg-sky-600 text-white'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-sky-300 hover:text-sky-700'
+                  }`}
+                >
+                  {area.label}
+                </button>
+              ))}
+            </div>
+            {areaLabels.length > 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-gray-500">
+                Perguntas específicas ativas para {areaLabels.join(', ')}.
+              </p>
+            )}
+          </section>
+
+          <nav className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+            {SECTIONS.map((section, index) => {
+              const stats = getSectionStats(section)
+              return (
+                <button
+                  type="button"
+                  key={section.id}
+                  onClick={() => setSection(index)}
+                  className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors last:mb-0 ${
+                    activeSection === index
+                      ? 'bg-gray-950 text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className={`flex h-6 w-8 items-center justify-center rounded text-[11px] font-semibold ${
+                    activeSection === index ? 'bg-white/15 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {section.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{section.label}</span>
+                    <span className={`block text-[11px] ${activeSection === index ? 'text-white/70' : 'text-gray-400'}`}>
+                      {stats.answered}/{stats.total} respondidas
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </nav>
+        </aside>
+
+        <div className="space-y-4">
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Seção ativa</p>
+                <h2 className="mt-1 text-lg font-semibold text-gray-950">{currentSection.label}</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-600">{currentSection.desc}</p>
+              </div>
+              <span className="w-fit rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
+                {questions.length} pergunta{questions.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-2 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pergunta personalizada</p>
+              <textarea
+                className="min-h-20 w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                placeholder="Escreva uma pergunta própria para esta seção."
+                value={customDraft.q}
+                onChange={e => setCustomDraft(draft => ({ ...draft, q: e.target.value }))}
+              />
+              <input
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                placeholder="Contexto opcional para orientar a resposta."
+                value={customDraft.hint}
+                onChange={e => setCustomDraft(draft => ({ ...draft, hint: e.target.value }))}
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={addCustomQuestion}
+                  className="rounded-md bg-gray-950 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+                >
+                  Adicionar pergunta
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            {questions.map((item, qi) => (
+              <QuestionCard
+                key={item.id}
+                num={qi + 1}
+                question={item.q}
+                hint={item.hint}
+                isArea={item.isArea}
+                isCustom={item.isCustom}
+                areaLabel={item.areaLabel}
+                answerKey={item.id}
+                answer={getAnswerForQuestion(answers, item, currentSection.id, qi)}
+                onChange={handleAnswer}
+                onUpdateCustom={item.isCustom ? patch => updateCustomQuestion(currentSection.id, item.id, patch) : undefined}
+                onRemoveCustom={item.isCustom ? () => removeCustomQuestion(currentSection.id, item.id) : undefined}
+              />
+            ))}
+          </section>
+
+          <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Síntese para documentação</p>
+            </div>
+            {[
+              ['Principais descobertas', 'descobertas', 'Aprendizados centrais sobre o processo, regras e contexto.'],
+              ['Riscos identificados', 'riscos', 'Pontos frágeis, dependências, impactos e controles ausentes.'],
+              ['Oportunidades', 'oportunidades', 'Melhorias, automações e simplificações candidatas ao backlog.'],
+              ['Dúvidas em aberto', 'duvidas', 'Pendências que precisam de validação, dado ou decisão.'],
+              ['Próximos passos', 'passos', 'Ações, responsáveis e decisões combinadas.'],
+            ].map(([label, field, placeholder]) => (
+              <div key={field} className="grid border-b border-gray-100 last:border-b-0 sm:grid-cols-[190px_1fr]">
+                <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600 sm:border-b-0 sm:border-r">
+                  {label}
+                </div>
+                <textarea
+                  className="min-h-20 resize-y bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:bg-sky-50/30"
+                  placeholder={placeholder}
+                  value={summary[field]}
+                  onChange={e => setSummary(s => ({ ...s, [field]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </section>
+
+          {error && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {error}
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-md bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+            >
+              {saving ? 'Salvando...' : saved ? 'Salvo' : editing ? 'Atualizar entrevista' : 'Salvar entrevista'}
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-colors hover:border-sky-300 hover:text-sky-700"
+            >
+              Exportar PDF com prompt de IA
+            </button>
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-3 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

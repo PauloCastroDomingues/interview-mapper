@@ -1,14 +1,14 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Interview Mapper — Mapeamento de Processos',
+  title: 'Interview Mapper - Mapeamento de Processos',
   description: 'Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders.',
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="pt-BR">
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen bg-[#f5f7fb] text-gray-900 antialiased">
         {children}
       </body>
     </html>
