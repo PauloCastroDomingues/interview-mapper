@@ -34,6 +34,7 @@ async function compressImage(file, fallbackName) {
         resolve({
           name: file.name || fallbackName,
           dataUrl: canvas.toDataURL('image/jpeg', JPEG_QUALITY),
+          caption: '',
         })
       }
       img.src = e.target.result
@@ -136,6 +137,13 @@ export default function QuestionCard({
 
   function removeImage(i) {
     const next = images.filter((_, idx) => idx !== i)
+    onChange(answerKey, { text, images: next })
+  }
+
+  function updateImageCaption(index, caption) {
+    const next = images.map((image, idx) => (
+      idx === index ? { ...image, caption } : image
+    ))
     onChange(answerKey, { text, images: next })
   }
 
@@ -250,6 +258,12 @@ export default function QuestionCard({
                     Remover
                   </button>
                   <p className="mt-1 truncate text-[11px] text-gray-500">{img.name}</p>
+                  <textarea
+                    className="mt-2 min-h-16 w-full resize-y rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    placeholder="Legenda: o que este print comprova?"
+                    value={img.caption || ''}
+                    onChange={event => updateImageCaption(i, event.target.value)}
+                  />
                 </div>
               ))}
             </div>

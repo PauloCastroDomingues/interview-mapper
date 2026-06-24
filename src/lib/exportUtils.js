@@ -131,7 +131,10 @@ export function generateExportText(interview) {
       out += `${index + 1}. ${item.q}${badges.length ? ` [${badges.join(' | ')}]` : ''}\n`
       if (answer?.text?.trim()) out += `${answer.text.trim()}\n`
       if (answer?.images?.length) {
-        out += `Imagens anexadas: ${answer.images.map(image => image.name).join(', ')}\n`
+        out += `Imagens anexadas:\n`
+        answer.images.forEach(image => {
+          out += `- ${image.name}${image.caption?.trim() ? `: ${image.caption.trim()}` : ''}\n`
+        })
       }
       out += '\n'
     })
@@ -311,6 +314,16 @@ function buildHtml(interview) {
       font-size: 10px;
       word-break: break-word;
     }
+    figcaption strong,
+    figcaption span {
+      display: block;
+    }
+    figcaption span {
+      margin-top: 2px;
+      color: #374151;
+      font-size: 11px;
+      line-height: 1.35;
+    }
     .summary-item {
       margin-top: 10px;
       padding: 10px;
@@ -387,7 +400,10 @@ function buildHtml(interview) {
                   ${answer.images.map(image => `
                     <figure>
                       <img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.name || 'Print anexado')}">
-                      <figcaption>${escapeHtml(image.name || 'Print anexado')}</figcaption>
+                      <figcaption>
+                        <strong>${escapeHtml(image.name || 'Print anexado')}</strong>
+                        ${image.caption?.trim() ? `<span>${escapeHtml(image.caption.trim())}</span>` : ''}
+                      </figcaption>
                     </figure>
                   `).join('')}
                 </div>

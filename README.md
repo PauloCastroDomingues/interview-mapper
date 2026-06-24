@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.1.1`
+**Versão atual:** `v1.2.0`
 
-Esta versão transforma o app em um workspace mais completo para Product Owners: modo guiado ou manual do zero, perguntas personalizadas por seção, prints colados diretamente nos campos e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais completo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, autosave local, legendas por print e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -12,9 +12,11 @@ Esta versão transforma o app em um workspace mais completo para Product Owners:
 
 - **Nova entrevista** — formulário adaptável por área (CRM, Dados, Produto, Dev, CS, etc.)
 - **Modo manual do zero** — crie entrevistas sem roteiro pronto, usando apenas suas próprias perguntas
+- **Biblioteca de perguntas** — drawer lateral com perguntas reutilizáveis do roteiro base e por área
 - **Perguntas específicas por área** — ativadas com chips de seleção e orientadas para documentação de PO
 - **Perguntas personalizadas** — crie perguntas próprias dentro de cada seção da entrevista
-- **Prints/imagens por campo** — anexe, arraste ou cole imagens diretamente nas perguntas
+- **Prints/imagens com legenda** — anexe, arraste ou cole imagens e descreva o que cada evidência comprova
+- **Autosave local** — rascunhos são salvos automaticamente no navegador sem disparar sync remoto a cada digitação
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
 - **Exportação em PDF com prompt oculto para IA** — o PDF fica limpo para leitura humana, mas mantém instruções internas para a IA
@@ -164,6 +166,7 @@ interview-mapper/
 │   ├── components/
 │   │   ├── InterviewForm.jsx  # Formulário principal
 │   │   ├── InterviewList.jsx  # Lista de entrevistas salvas
+│   │   ├── QuestionLibraryDrawer.jsx # Biblioteca lateral de perguntas
 │   │   └── QuestionCard.jsx   # Card individual com notas + imagens
 │   └── lib/
 │       ├── questions.js       # Perguntas fixas, por área e personalizadas
@@ -185,6 +188,8 @@ interview-mapper/
 Durante a entrevista, use o bloco **Pergunta personalizada** dentro da seção ativa para criar perguntas livres sem editar código.
 
 Se quiser começar completamente do zero, selecione **Manual do zero** no topo do formulário. Nesse modo, as perguntas prontas e perguntas por área ficam ocultas, e a entrevista usa apenas as perguntas que você criar.
+
+Use **Biblioteca** para abrir o drawer lateral e reaproveitar perguntas do roteiro base ou das áreas. A pergunta escolhida entra como pergunta personalizada na seção ativa.
 
 **Novas perguntas fixas no produto** → edite `src/lib/questions.js`, array `SECTIONS`, na seção correspondente:
 ```js
