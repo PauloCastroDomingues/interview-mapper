@@ -2,16 +2,21 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
+**Versão atual:** `v1.1.0`
+
+Esta versão transforma o app em um workspace mais completo para Product Owners: perguntas mais específicas, perguntas personalizadas por seção, prints colados diretamente nos campos e exportação em PDF com prompt refinado para IA.
+
 ---
 
 ## Funcionalidades
 
 - **Nova entrevista** — formulário adaptável por área (CRM, Dados, Produto, Dev, CS, etc.)
-- **Perguntas específicas por área** — ativadas com chips de seleção
-- **Upload de prints/imagens** — compressão automática, com limite por pergunta para preservar o armazenamento local
+- **Perguntas específicas por área** — ativadas com chips de seleção e orientadas para documentação de PO
+- **Perguntas personalizadas** — crie perguntas próprias dentro de cada seção da entrevista
+- **Prints/imagens por campo** — anexe, arraste ou cole imagens diretamente nas perguntas
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
-- **Exportação com prompt de IA** — o arquivo exportado contém instruções que fazem qualquer IA analisar automaticamente a entrevista
+- **Exportação em PDF com prompt de IA** — o PDF já sai com um prompt refinado para análise por IA
 
 ---
 
@@ -160,9 +165,9 @@ interview-mapper/
 │   │   ├── InterviewList.jsx  # Lista de entrevistas salvas
 │   │   └── QuestionCard.jsx   # Card individual com notas + imagens
 │   └── lib/
-│       ├── questions.js       # Todas as perguntas e perguntas por área
+│       ├── questions.js       # Perguntas fixas, por área e personalizadas
 │       ├── storage.js         # CRUD no localStorage
-│       └── exportUtils.js     # Geração de arquivo exportado com prompt de IA
+│       └── exportUtils.js     # Geração do PDF com prompt de IA
 ├── apps-script/
 │   └── Code.gs              # Backend opcional (Google Sheets)
 ├── .env.local.example
@@ -176,7 +181,9 @@ interview-mapper/
 
 ## 5. Como adicionar novas perguntas ou áreas
 
-**Novas perguntas gerais** → edite `src/lib/questions.js`, array `SECTIONS`, na seção correspondente:
+Durante a entrevista, use o bloco **Pergunta personalizada** dentro da seção ativa para criar perguntas livres sem editar código.
+
+**Novas perguntas fixas no produto** → edite `src/lib/questions.js`, array `SECTIONS`, na seção correspondente:
 ```js
 {
   id: 'dados-nome-estavel-da-pergunta',
@@ -205,17 +212,22 @@ Use IDs estáveis e únicos. Eles evitam que entrevistas antigas percam o víncu
 
 ---
 
-## 6. O prompt de IA no arquivo exportado
+## 6. O PDF com prompt de IA
 
-Quando você clica em **Exportar**, o arquivo `.txt` gerado começa com um bloco de instruções formatado. Ao colar esse arquivo em qualquer IA (Claude, ChatGPT, Gemini), ela lê as instruções automaticamente e entrega:
+Quando você clica em **Exportar PDF com prompt de IA**, o app abre uma versão imprimível da entrevista. No diálogo do navegador, escolha **Salvar como PDF**.
+
+O PDF começa com um prompt mestre para a IA analisar o material como Product Owner sênior e entregar:
 
 1. Resumo executivo do processo
-2. Fluxo passo a passo com atores e sistemas
-3. Integrações e fontes de dados
-4. Riscos classificados por impacto
-5. Oportunidades de melhoria priorizadas
-6. Perguntas em aberto
-7. Recomendações para o time de desenvolvimento
+2. Escopo do mapeamento e objetivo do PO
+3. Fluxo AS-IS passo a passo com atores, sistemas, entradas, saídas e decisões
+4. Regras de negócio, exceções, SLAs, thresholds e aprovações
+5. Dados, integrações, fontes de verdade e restrições de acesso
+6. Leitura das evidências visuais anexadas
+7. Riscos classificados por impacto, probabilidade, evidência e mitigação
+8. Oportunidades priorizadas por impacto, esforço e urgência
+9. Backlog sugerido com histórias de usuário e critérios de aceite
+10. Perguntas em aberto e próximos passos para o PO
 
 ---
 

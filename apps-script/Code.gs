@@ -16,17 +16,30 @@
 
 const SHEET_ID  = 'COLE_O_ID_DA_SUA_PLANILHA_AQUI'
 const SHEET_TAB = 'Entrevistas'
+const HEADERS = [
+  'ID',
+  'Processo',
+  'Objetivo',
+  'Entrevistado',
+  'Entrevistador',
+  'Área(s)',
+  'Data',
+  'Progresso (%)',
+  'Criado em',
+  'Atualizado em',
+  'JSON Completo',
+]
 
 function getSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID)
   let sheet = ss.getSheetByName(SHEET_TAB)
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_TAB)
-    sheet.appendRow(['ID', 'Entrevistado', 'Entrevistador', 'Área(s)', 'Data', 'Progresso (%)', 'Criado em', 'Atualizado em', 'JSON Completo'])
+    sheet.appendRow(HEADERS)
     sheet.setFrozenRows(1)
-  } else if (sheet.getLastColumn() === 8) {
-    sheet.insertColumnBefore(8)
-    sheet.getRange(1, 8).setValue('Atualizado em')
+  } else {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+    sheet.setFrozenRows(1)
   }
   return sheet
 }
@@ -43,6 +56,8 @@ function doPost(e) {
       const areas = (interview.selectedAreas || []).join(', ')
       const row   = [
         interview.id,
+        interview.meta?.processo || '',
+        interview.meta?.objetivo || '',
         interview.meta?.entrevistado || '',
         interview.meta?.entrevistador || '',
         areas,
@@ -79,10 +94,15 @@ function doGet(e) {
   try {
     const sheet = getSheet()
     const rows  = sheet.getDataRange().getValues().slice(1) // skip header
+    const jsonIndex = HEADERS.indexOf('JSON Completo')
     const interviews = rows
       .filter(r => r[0])
       .map(r => {
-        try { return JSON.parse(r[8] || r[7]) } catch { return null }
+        const candidates = [r[jsonIndex], r[8], r[7]].filter(Boolean)
+        for (var i = 0; i < candidates.length; i++) {
+          try { return JSON.parse(candidates[i]) } catch (err) {}
+        }
+        return null
       })
       .filter(Boolean)
     return jsonResponse({ ok: true, interviews })
