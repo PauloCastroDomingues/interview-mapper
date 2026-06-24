@@ -8,11 +8,12 @@ function calcProgress(interview) {
   if (typeof interview.stats?.progressPct === 'number') return interview.stats.progressPct
 
   const { selectedAreas = [], customQuestions = {}, answers = {} } = interview
+  const questionOptions = { manualOnly: interview.questionMode === 'manual' }
   const total = SECTIONS.reduce((acc, section) => {
-    return acc + getAllQuestionsForSection(section.id, selectedAreas, customQuestions).length
+    return acc + getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions).length
   }, 0)
   const done = SECTIONS.reduce((acc, section) => {
-    return acc + getAllQuestionsForSection(section.id, selectedAreas, customQuestions).filter((item, index) => {
+    return acc + getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions).filter((item, index) => {
       const ans = getAnswerForQuestion(answers, item, section.id, index)
       return ans?.text?.trim() || ans?.images?.length > 0
     }).length
@@ -72,7 +73,7 @@ export default function InterviewList({ interviews, onEdit, onRefresh }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Histórico</p>
@@ -97,6 +98,7 @@ export default function InterviewList({ interviews, onEdit, onRefresh }) {
             .filter(Boolean)
           const imgCount = countImages(interview.answers)
           const customCount = countCustomQuestions(interview.customQuestions)
+          const isManual = interview.questionMode === 'manual'
 
           return (
             <article key={interview.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-sky-200">
@@ -111,6 +113,13 @@ export default function InterviewList({ interviews, onEdit, onRefresh }) {
                         {area}
                       </span>
                     ))}
+                    <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                      isManual
+                        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`}>
+                      {isManual ? 'manual' : 'guiada'}
+                    </span>
                     {customCount > 0 && (
                       <span className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                         {customCount} personalizada{customCount !== 1 ? 's' : ''}

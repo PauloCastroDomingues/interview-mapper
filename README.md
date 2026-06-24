@@ -2,21 +2,22 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.1.0`
+**Versão atual:** `v1.1.1`
 
-Esta versão transforma o app em um workspace mais completo para Product Owners: perguntas mais específicas, perguntas personalizadas por seção, prints colados diretamente nos campos e exportação em PDF com prompt refinado para IA.
+Esta versão transforma o app em um workspace mais completo para Product Owners: modo guiado ou manual do zero, perguntas personalizadas por seção, prints colados diretamente nos campos e exportação em PDF com prompt oculto para IA.
 
 ---
 
 ## Funcionalidades
 
 - **Nova entrevista** — formulário adaptável por área (CRM, Dados, Produto, Dev, CS, etc.)
+- **Modo manual do zero** — crie entrevistas sem roteiro pronto, usando apenas suas próprias perguntas
 - **Perguntas específicas por área** — ativadas com chips de seleção e orientadas para documentação de PO
 - **Perguntas personalizadas** — crie perguntas próprias dentro de cada seção da entrevista
 - **Prints/imagens por campo** — anexe, arraste ou cole imagens diretamente nas perguntas
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
-- **Exportação em PDF com prompt de IA** — o PDF já sai com um prompt refinado para análise por IA
+- **Exportação em PDF com prompt oculto para IA** — o PDF fica limpo para leitura humana, mas mantém instruções internas para a IA
 
 ---
 
@@ -183,6 +184,8 @@ interview-mapper/
 
 Durante a entrevista, use o bloco **Pergunta personalizada** dentro da seção ativa para criar perguntas livres sem editar código.
 
+Se quiser começar completamente do zero, selecione **Manual do zero** no topo do formulário. Nesse modo, as perguntas prontas e perguntas por área ficam ocultas, e a entrevista usa apenas as perguntas que você criar.
+
 **Novas perguntas fixas no produto** → edite `src/lib/questions.js`, array `SECTIONS`, na seção correspondente:
 ```js
 {
@@ -216,7 +219,9 @@ Use IDs estáveis e únicos. Eles evitam que entrevistas antigas percam o víncu
 
 Quando você clica em **Exportar PDF com prompt de IA**, o app abre uma versão imprimível da entrevista. No diálogo do navegador, escolha **Salvar como PDF**.
 
-O PDF começa com um prompt mestre para a IA analisar o material como Product Owner sênior e entregar:
+O PDF não mostra o prompt como uma seção visual. As instruções ficam embutidas de forma discreta no arquivo para orientar a leitura da IA sem poluir o documento para pessoas.
+
+O prompt orienta a IA a analisar o material como Product Owner sênior e entregar:
 
 1. Resumo executivo do processo
 2. Escopo do mapeamento e objetivo do PO

@@ -364,9 +364,12 @@ export function getCustomQuestionsForSection(customQuestions = {}, sectionId) {
     .map(item => ({ ...item, isCustom: true, section: sectionId }))
 }
 
-export function getAllQuestionsForSection(sectionId, selectedAreas = [], customQuestions = {}) {
+export function getAllQuestionsForSection(sectionId, selectedAreas = [], customQuestions = {}, options = {}) {
   const section = SECTIONS.find(s => s.id === sectionId)
   if (!section) return []
+
+  const custom = getCustomQuestionsForSection(customQuestions, sectionId)
+  if (options.manualOnly) return custom
 
   const core = section.questions.map(q => ({ ...q, isArea: false, isCustom: false }))
   const extra = selectedAreas.flatMap(areaId => {
@@ -379,7 +382,6 @@ export function getAllQuestionsForSection(sectionId, selectedAreas = [], customQ
         areaLabel: AREAS.find(a => a.id === areaId)?.label,
       }))
   })
-  const custom = getCustomQuestionsForSection(customQuestions, sectionId)
 
   return [...core, ...extra, ...custom]
 }
@@ -388,11 +390,11 @@ export function getAnswerForQuestion(answers = {}, question, sectionId, index) {
   return answers[question.id] || answers[`${sectionId}-${index}`] || null
 }
 
-export function migrateAnswerKeys(selectedAreas = [], answers = {}, customQuestions = {}) {
+export function migrateAnswerKeys(selectedAreas = [], answers = {}, customQuestions = {}, options = {}) {
   const migrated = { ...answers }
 
   SECTIONS.forEach(section => {
-    getAllQuestionsForSection(section.id, selectedAreas, customQuestions).forEach((question, index) => {
+    getAllQuestionsForSection(section.id, selectedAreas, customQuestions, options).forEach((question, index) => {
       const legacyKey = `${section.id}-${index}`
       if (!migrated[question.id] && migrated[legacyKey]) {
         migrated[question.id] = migrated[legacyKey]
