@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   SECTIONS,
   AREAS,
@@ -39,6 +39,26 @@ const EMPTY_TRANSCRIPTION = {
   doubts: '',
   audioRefs: [],
 }
+
+const AUTOSAVE_DELAY_MS = 1800
+const SESSION_DURATIONS = ['30 minutos', '45 minutos', '60 minutos', '90 minutos', '120 minutos']
+const SUMMARY_FIELDS = [
+  ['Principais descobertas', 'descobertas', 'Aprendizados centrais sobre o processo, regras e contexto.'],
+  ['Riscos identificados', 'riscos', 'Pontos frágeis, dependências, impactos e controles ausentes.'],
+  ['Oportunidades', 'oportunidades', 'Melhorias, automações e simplificações candidatas ao backlog.'],
+  ['Dúvidas em aberto', 'duvidas', 'Pendências que precisam de validação, dado ou decisão.'],
+  ['Próximos passos', 'passos', 'Ações, responsáveis e decisões combinadas.'],
+]
+const TRANSCRIPTION_FIELDS = [
+  ['Pontos-chave', 'highlights', 'Trechos, frases e sinais que merecem atenção.'],
+  ['Decisões citadas', 'decisions', 'Acordos, regras, exceções e responsáveis mencionados.'],
+  ['Dúvidas da transcrição', 'doubts', 'Falas ambíguas, termos a validar e pontos incompletos.'],
+]
+const WORKSPACE_TABS = [
+  { id: 'questions', label: 'Roteiro' },
+  { id: 'transcription', label: 'Transcrição' },
+  { id: 'summary', label: 'Síntese' },
+]
 const QUESTION_MODES = {
   guided: {
     label: 'Guiada',
@@ -81,23 +101,42 @@ function formatBytes(bytes = 0) {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
 }
 
+function makeClientId(prefix) {
+  if (globalThis.crypto?.randomUUID) return `${prefix}_${crypto.randomUUID()}`
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function hasText(value) {
+  return Boolean(String(value || '').trim())
+}
+
+function isAnswerComplete(answer) {
+  return Boolean(answer?.text?.trim() || answer?.images?.length > 0)
+}
+
+function getTranscriptionContentCount(transcription = {}) {
+  return [transcription.raw, transcription.highlights, transcription.decisions, transcription.doubts]
+    .filter(hasText)
+    .length
+}
+
+function getAudioCount(transcription = {}) {
+  return Array.isArray(transcription.audioRefs) ? transcription.audioRefs.length : 0
+}
+
+function getSummaryContentCount(summary = {}) {
+  return SUMMARY_FIELDS.filter(([, field]) => hasText(summary[field])).length
+}
+
 function hasDraftContent(interview) {
   const hasMeta = Object.entries(interview.meta || {}).some(([key, value]) => (
-    !['data', 'duracao'].includes(key) && String(value || '').trim()
+    !['data', 'duracao'].includes(key) && hasText(value)
   ))
-  const hasAnswers = Object.values(interview.answers || {}).some(answer => (
-    answer?.text?.trim() || answer?.images?.length > 0
-  ))
+  const hasAnswers = Object.values(interview.answers || {}).some(isAnswerComplete)
   const hasCustomQuestions = Object.values(interview.customQuestions || {}).some(items => items?.length > 0)
-  const hasSummary = Object.values(interview.summary || {}).some(value => String(value || '').trim())
+  const hasSummary = getSummaryContentCount(interview.summary) > 0
   const transcription = normalizeTranscription(interview.transcription)
-  const hasTranscription = Boolean(
-    transcription.raw.trim()
-    || transcription.highlights.trim()
-    || transcription.decisions.trim()
-    || transcription.doubts.trim()
-    || transcription.audioRefs.length
-  )
+  const hasTranscription = getTranscriptionContentCount(transcription) > 0 || getAudioCount(transcription) > 0
   return hasMeta || hasAnswers || hasCustomQuestions || hasSummary || hasTranscription
 }
 
@@ -170,9 +209,29 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   const [error, setError] = useState('')
 
   const manualOnly = questionMode === 'manual'
-  const questionOptions = { manualOnly }
+  const questionOptions = useMemo(() => ({ manualOnly }), [manualOnly])
   const currentSection = SECTIONS[activeSection]
-  const questions = getAllQuestionsForSection(currentSection.id, selectedAreas, customQuestions, questionOptions)
+  const questions = useMemo(() => (
+    getAllQuestionsForSection(currentSection.id, selectedAreas, customQuestions, questionOptions)
+  ), [currentSection.id, customQuestions, questionOptions, selectedAreas])
+  const sectionStats = useMemo(() => {
+    return Object.fromEntries(SECTIONS.map(section => {
+      const sectionQuestions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions)
+      const answered = sectionQuestions.filter((item, qi) => {
+        const ans = getAnswerForQuestion(answers, item, section.id, qi)
+        return isAnswerComplete(ans)
+      }).length
+
+      return [section.id, { total: sectionQuestions.length, answered }]
+    }))
+  }, [answers, customQuestions, questionOptions, selectedAreas])
+  const totalQ = useMemo(() => (
+    SECTIONS.reduce((acc, section) => acc + (sectionStats[section.id]?.total || 0), 0)
+  ), [sectionStats])
+  const doneQ = useMemo(() => (
+    SECTIONS.reduce((acc, section) => acc + (sectionStats[section.id]?.answered || 0), 0)
+  ), [sectionStats])
+  const pct = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0
 
   useEffect(() => {
     onSaveRef.current = onSave
@@ -186,6 +245,34 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     setAnswers(prev => ({ ...prev, [key]: value }))
   }, [])
 
+  function focusWorkspaceTab(tabId) {
+    window.requestAnimationFrame(() => {
+      document.getElementById(`workspace-tab-${tabId}`)?.focus()
+    })
+  }
+
+  function selectWorkspaceTab(tabId) {
+    setWorkspaceTab(tabId)
+    focusWorkspaceTab(tabId)
+  }
+
+  function handleWorkspaceTabKeyDown(event, tabId) {
+    const currentIndex = WORKSPACE_TABS.findIndex(tab => tab.id === tabId)
+    if (currentIndex < 0) return
+
+    const lastIndex = WORKSPACE_TABS.length - 1
+    const keys = {
+      ArrowLeft: currentIndex === 0 ? lastIndex : currentIndex - 1,
+      ArrowRight: currentIndex === lastIndex ? 0 : currentIndex + 1,
+      Home: 0,
+      End: lastIndex,
+    }
+    if (!(event.key in keys)) return
+
+    event.preventDefault()
+    selectWorkspaceTab(WORKSPACE_TABS[keys[event.key]].id)
+  }
+
   function updateTranscription(field, value) {
     setTranscription(prev => ({ ...prev, [field]: value }))
   }
@@ -194,7 +281,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     const nextFiles = Array.from(files || [])
       .filter(file => file?.name)
       .map((file, index) => ({
-        id: `audio_${Date.now()}_${index}_${file.name}`,
+        id: makeClientId(`audio_${index}`),
         name: file.name,
         size: file.size || 0,
         type: file.type || 'audio',
@@ -214,18 +301,8 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   }
 
   function getSectionStats(section) {
-    const sectionQuestions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions)
-    const answered = sectionQuestions.filter((item, qi) => {
-      const ans = getAnswerForQuestion(answers, item, section.id, qi)
-      return ans?.text?.trim() || ans?.images?.length > 0
-    }).length
-
-    return { total: sectionQuestions.length, answered }
+    return sectionStats[section.id] || { total: 0, answered: 0 }
   }
-
-  const totalQ = SECTIONS.reduce((acc, s) => acc + getSectionStats(s).total, 0)
-  const doneQ = SECTIONS.reduce((acc, s) => acc + getSectionStats(s).answered, 0)
-  const pct = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0
 
   function addCustomQuestion() {
     if (!customDraft.q.trim()) {
@@ -330,7 +407,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
       } catch {
         setAutosave(prev => ({ ...prev, status: 'error' }))
       }
-    }, 1800)
+    }, AUTOSAVE_DELAY_MS)
 
     return () => window.clearTimeout(timer)
   }, [answers, customQuestions, doneQ, initialData, interviewId, manualOnly, meta, pct, questionMode, selectedAreas, summary, totalQ, transcription])
@@ -363,22 +440,24 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     }
   }
 
-  const areaLabels = selectedAreas
-    .map(id => AREAS.find(a => a.id === id)?.label)
-    .filter(Boolean)
-  const summaryCount = Object.values(summary).filter(value => String(value || '').trim()).length
-  const transcriptCount = [
-    transcription.raw,
-    transcription.highlights,
-    transcription.decisions,
-    transcription.doubts,
-  ].filter(value => String(value || '').trim()).length
-  const audioCount = transcription.audioRefs.length
-  const workspaceTabs = [
-    { id: 'questions', label: 'Roteiro', detail: `${doneQ}/${totalQ || 0}` },
-    { id: 'transcription', label: 'Transcrição', detail: transcriptCount || audioCount ? `${transcriptCount + audioCount}` : '0' },
-    { id: 'summary', label: 'Síntese', detail: `${summaryCount}/5` },
-  ]
+  const areaLabels = useMemo(() => (
+    selectedAreas
+      .map(id => AREAS.find(a => a.id === id)?.label)
+      .filter(Boolean)
+  ), [selectedAreas])
+  const summaryCount = useMemo(() => getSummaryContentCount(summary), [summary])
+  const transcriptCount = useMemo(() => getTranscriptionContentCount(transcription), [transcription])
+  const audioCount = getAudioCount(transcription)
+  const workspaceTabs = useMemo(() => (
+    WORKSPACE_TABS.map(tab => {
+      if (tab.id === 'questions') return { ...tab, detail: `${doneQ}/${totalQ || 0}` }
+      if (tab.id === 'transcription') {
+        const totalTranscriptionItems = transcriptCount + audioCount
+        return { ...tab, detail: totalTranscriptionItems ? `${totalTranscriptionItems}` : '0' }
+      }
+      return { ...tab, detail: `${summaryCount}/${SUMMARY_FIELDS.length}` }
+    })
+  ), [audioCount, doneQ, summaryCount, totalQ, transcriptCount])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5">
@@ -469,7 +548,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                     value={meta.duracao}
                     onChange={e => setMeta(m => ({ ...m, duracao: e.target.value }))}
                   >
-                    {['30 minutos', '45 minutos', '60 minutos', '90 minutos', '120 minutos'].map(option => (
+                    {SESSION_DURATIONS.map(option => (
                       <option key={option}>{option}</option>
                     ))}
                   </select>
@@ -514,6 +593,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                   <button
                     type="button"
                     key={mode}
+                    aria-pressed={active}
                     onClick={() => {
                       setQuestionMode(mode)
                       setError('')
@@ -537,6 +617,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                     <button
                       type="button"
                       key={area.id}
+                      aria-pressed={selectedAreas.includes(area.id)}
                       onClick={() => toggleArea(area.id)}
                       className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                         selectedAreas.includes(area.id)
@@ -578,6 +659,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                   <button
                     type="button"
                     key={section.id}
+                    aria-current={activeSection === index && workspaceTab === 'questions' ? 'step' : undefined}
                     onClick={() => {
                       setSection(index)
                       setWorkspaceTab('questions')
@@ -608,14 +690,19 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
 
         <div className="space-y-4">
           <section className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm shadow-gray-200/60">
-            <div className="grid gap-1 sm:grid-cols-3">
+            <div className="grid gap-1 sm:grid-cols-3" role="tablist" aria-label="Áreas de trabalho da entrevista">
               {workspaceTabs.map(tab => {
                 const active = workspaceTab === tab.id
                 return (
                   <button
                     type="button"
                     key={tab.id}
+                    id={`workspace-tab-${tab.id}`}
+                    role="tab"
+                    aria-selected={active}
+                    aria-controls={`workspace-panel-${tab.id}`}
                     onClick={() => setWorkspaceTab(tab.id)}
+                    onKeyDown={event => handleWorkspaceTabKeyDown(event, tab.id)}
                     className={`flex items-center justify-between rounded-md px-3 py-2 text-left transition-colors ${
                       active ? 'bg-gray-950 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950'
                     }`}
@@ -633,7 +720,12 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
           </section>
 
           {workspaceTab === 'questions' && (
-            <>
+            <div
+              id="workspace-panel-questions"
+              role="tabpanel"
+              aria-labelledby="workspace-tab-questions"
+              className="space-y-4"
+            >
               <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm shadow-gray-200/60">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -714,11 +806,16 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                   </div>
                 )}
               </section>
-            </>
+            </div>
           )}
 
           {workspaceTab === 'transcription' && (
-            <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+            <section
+              id="workspace-panel-transcription"
+              role="tabpanel"
+              aria-labelledby="workspace-tab-transcription"
+              className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60"
+            >
               <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -798,11 +895,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                 </div>
 
                 <div className="grid gap-3 lg:grid-cols-3">
-                  {[
-                    ['Pontos-chave', 'highlights', 'Trechos, frases e sinais que merecem atenção.'],
-                    ['Decisões citadas', 'decisions', 'Acordos, regras, exceções e responsáveis mencionados.'],
-                    ['Dúvidas da transcrição', 'doubts', 'Falas ambíguas, termos a validar e pontos incompletos.'],
-                  ].map(([label, field, placeholder]) => (
+                  {TRANSCRIPTION_FIELDS.map(([label, field, placeholder]) => (
                     <div key={field}>
                       <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</label>
                       <textarea
@@ -819,17 +912,16 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
           )}
 
           {workspaceTab === 'summary' && (
-            <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+            <section
+              id="workspace-panel-summary"
+              role="tabpanel"
+              aria-labelledby="workspace-tab-summary"
+              className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60"
+            >
               <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Síntese executiva</p>
               </div>
-              {[
-                ['Principais descobertas', 'descobertas', 'Aprendizados centrais sobre o processo, regras e contexto.'],
-                ['Riscos identificados', 'riscos', 'Pontos frágeis, dependências, impactos e controles ausentes.'],
-                ['Oportunidades', 'oportunidades', 'Melhorias, automações e simplificações candidatas ao backlog.'],
-                ['Dúvidas em aberto', 'duvidas', 'Pendências que precisam de validação, dado ou decisão.'],
-                ['Próximos passos', 'passos', 'Ações, responsáveis e decisões combinadas.'],
-              ].map(([label, field, placeholder]) => (
+              {SUMMARY_FIELDS.map(([label, field, placeholder]) => (
                 <div key={field} className="grid border-b border-gray-100 last:border-b-0 sm:grid-cols-[190px_1fr]">
                   <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600 sm:border-b-0 sm:border-r">
                     {label}
