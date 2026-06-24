@@ -36,6 +36,7 @@ function stripImagesForRemote(interview) {
     Object.entries(interview.answers || {}).map(([key, answer]) => {
       const images = (answer?.images || []).map(img => ({
         name: img.name,
+        caption: img.caption || '',
         remoteNote: 'Imagem mantida apenas no navegador local',
       }))
       return [key, { ...answer, images }]
@@ -100,7 +101,8 @@ export function getInterview(id) {
   return getInterviews().find(i => i.id === id) || null
 }
 
-export async function saveInterview(interview) {
+export async function saveInterview(interview, options = {}) {
+  const syncRemote = options.syncRemote !== false
   const data = load()
   const now  = new Date().toISOString()
   const idx  = data.interviews.findIndex(i => i.id === interview.id)
@@ -122,16 +124,18 @@ export async function saveInterview(interview) {
   save(data)
 
   let remoteError = ''
-  try {
-    await postToRemote({
-      action: 'save',
-      interview: stripImagesForRemote(savedInterview),
-    })
-  } catch (err) {
-    remoteError = err.message || 'Falha no sync com Google Sheets'
+  if (syncRemote) {
+    try {
+      await postToRemote({
+        action: 'save',
+        interview: stripImagesForRemote(savedInterview),
+      })
+    } catch (err) {
+      remoteError = err.message || 'Falha no sync com Google Sheets'
+    }
   }
 
-  return { interviews: data.interviews, remoteError }
+  return { interviews: data.interviews, savedInterview, remoteError }
 }
 
 export async function deleteInterview(id) {

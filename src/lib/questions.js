@@ -364,6 +364,36 @@ export function getCustomQuestionsForSection(customQuestions = {}, sectionId) {
     .map(item => ({ ...item, isCustom: true, section: sectionId }))
 }
 
+export function getQuestionLibraryItems() {
+  const coreItems = SECTIONS.flatMap(section => (
+    section.questions.map(question => ({
+      ...question,
+      libraryId: `core-${question.id}`,
+      section: section.id,
+      sectionLabel: section.label,
+      source: 'Roteiro base',
+      type: 'core',
+    }))
+  ))
+
+  const areaItems = Object.entries(AREA_QUESTIONS).flatMap(([areaId, questions]) => {
+    const area = AREAS.find(item => item.id === areaId)
+    return questions.map(question => {
+      const section = SECTIONS.find(item => item.id === question.section)
+      return {
+        ...question,
+        libraryId: `area-${areaId}-${question.id}`,
+        sectionLabel: section?.label || question.section,
+        areaLabel: area?.label || areaId,
+        source: area?.label || 'Área específica',
+        type: 'area',
+      }
+    })
+  })
+
+  return [...coreItems, ...areaItems]
+}
+
 export function getAllQuestionsForSection(sectionId, selectedAreas = [], customQuestions = {}, options = {}) {
   const section = SECTIONS.find(s => s.id === sectionId)
   if (!section) return []

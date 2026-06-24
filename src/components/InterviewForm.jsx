@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   SECTIONS,
   AREAS,
@@ -12,6 +12,7 @@ import {
 import { saveInterview } from '@/lib/storage'
 import { exportInterviewPdf } from '@/lib/exportUtils'
 import QuestionCard from './QuestionCard'
+import QuestionLibraryDrawer from './QuestionLibraryDrawer'
 
 const EMPTY_META = {
   processo: '',
@@ -44,8 +45,56 @@ const QUESTION_MODES = {
   },
 }
 
+function hasDraftContent(interview) {
+  const hasMeta = Object.entries(interview.meta || {}).some(([key, value]) => (
+    !['data', 'duracao'].includes(key) && String(value || '').trim()
+  ))
+  const hasAnswers = Object.values(interview.answers || {}).some(answer => (
+    answer?.text?.trim() || answer?.images?.length > 0
+  ))
+  const hasCustomQuestions = Object.values(interview.customQuestions || {}).some(items => items?.length > 0)
+  const hasSummary = Object.values(interview.summary || {}).some(value => String(value || '').trim())
+  return hasMeta || hasAnswers || hasCustomQuestions || hasSummary
+}
+
+function createInterviewPayload({
+  initialData,
+  interviewId,
+  meta,
+  questionMode,
+  selectedAreas,
+  answers,
+  customQuestions,
+  summary,
+  totalQ,
+  doneQ,
+  pct,
+  manualOnly,
+}) {
+  const cleanCustomQuestions = normalizeCustomQuestions(customQuestions)
+  const cleanAnswers = migrateAnswerKeys(selectedAreas, answers, cleanCustomQuestions, { manualOnly })
+
+  return {
+    ...(initialData || {}),
+    id: interviewId || initialData?.id,
+    meta,
+    questionMode,
+    selectedAreas,
+    customQuestions: cleanCustomQuestions,
+    answers: cleanAnswers,
+    summary,
+    stats: {
+      totalQuestions: totalQ,
+      answeredQuestions: doneQ,
+      progressPct: pct,
+    },
+  }
+}
+
 export default function InterviewForm({ initialData, onSave, onCancel }) {
   const editing = !!initialData?.id
+  const mountedRef = useRef(false)
+  const onSaveRef = useRef(onSave)
   const initialQuestionMode = initialData?.questionMode || 'guided'
   const initialQuestionOptions = { manualOnly: initialQuestionMode === 'manual' }
   const initialCustomQuestions = normalizeCustomQuestions(initialData?.customQuestions || {})
@@ -57,6 +106,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   )
 
   const [meta, setMeta] = useState({ ...EMPTY_META, ...(initialData?.meta || {}) })
+  const [interviewId, setInterviewId] = useState(initialData?.id || null)
   const [questionMode, setQuestionMode] = useState(initialQuestionMode)
   const [selectedAreas, setAreas] = useState(initialData?.selectedAreas || [])
   const [activeSection, setSection] = useState(0)
@@ -66,11 +116,18 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   const [summary, setSummary] = useState({ ...EMPTY_SUMMARY, ...(initialData?.summary || {}) })
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [autosave, setAutosave] = useState({ status: 'idle', at: '' })
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [error, setError] = useState('')
 
-  const questionOptions = { manualOnly: questionMode === 'manual' }
+  const manualOnly = questionMode === 'manual'
+  const questionOptions = { manualOnly }
   const currentSection = SECTIONS[activeSection]
   const questions = getAllQuestionsForSection(currentSection.id, selectedAreas, customQuestions, questionOptions)
+
+  useEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
 
   function toggleArea(id) {
     setAreas(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id])
@@ -110,6 +167,17 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     setError('')
   }
 
+  function addLibraryQuestion(item) {
+    const question = makeCustomQuestion(currentSection.id, item.q, item.hint)
+    setCustomQuestions(prev => ({
+      ...prev,
+      [currentSection.id]: [...(prev[currentSection.id] || []), question],
+    }))
+    setAnswers(prev => ({ ...prev, [question.id]: { text: '', images: [] } }))
+    setLibraryOpen(false)
+    setError('')
+  }
+
   function updateCustomQuestion(sectionId, questionId, patch) {
     setCustomQuestions(prev => ({
       ...prev,
@@ -132,24 +200,61 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   }
 
   function buildInterview() {
-    const cleanCustomQuestions = normalizeCustomQuestions(customQuestions)
-    const cleanAnswers = migrateAnswerKeys(selectedAreas, answers, cleanCustomQuestions, questionOptions)
-
-    return {
-      ...(initialData || {}),
+    return createInterviewPayload({
+      initialData,
+      interviewId,
       meta,
       questionMode,
       selectedAreas,
-      customQuestions: cleanCustomQuestions,
-      answers: cleanAnswers,
+      answers,
+      customQuestions,
       summary,
-      stats: {
-        totalQuestions: totalQ,
-        answeredQuestions: doneQ,
-        progressPct: pct,
-      },
-    }
+      totalQ,
+      doneQ,
+      pct,
+      manualOnly,
+    })
   }
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      return undefined
+    }
+
+    const interview = createInterviewPayload({
+      initialData,
+      interviewId,
+      meta,
+      questionMode,
+      selectedAreas,
+      answers,
+      customQuestions,
+      summary,
+      totalQ,
+      doneQ,
+      pct,
+      manualOnly,
+    })
+    if (!hasDraftContent(interview)) return undefined
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setAutosave(prev => ({ ...prev, status: 'saving' }))
+        const result = await saveInterview(interview, { syncRemote: false })
+        setInterviewId(result.savedInterview?.id || interview.id || null)
+        setAutosave({
+          status: 'saved',
+          at: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        })
+        onSaveRef.current?.()
+      } catch {
+        setAutosave(prev => ({ ...prev, status: 'error' }))
+      }
+    }, 1800)
+
+    return () => window.clearTimeout(timer)
+  }, [answers, customQuestions, doneQ, initialData, interviewId, manualOnly, meta, pct, questionMode, selectedAreas, summary, totalQ])
 
   async function handleSave() {
     setSaving(true)
@@ -157,6 +262,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     try {
       const interview = buildInterview()
       const result = await saveInterview(interview)
+      setInterviewId(result.savedInterview?.id || interview.id || null)
       setSaved(true)
       if (result.remoteError) {
         setError(`Salvo localmente. Sync com Google Sheets falhou: ${result.remoteError}`)
@@ -196,6 +302,21 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
             <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">{QUESTION_MODES[questionMode].label}</span>
             <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">{doneQ}/{totalQ} respostas</span>
             <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">{pct}% completo</span>
+            <span className={`rounded-md border px-2 py-1 ${
+              autosave.status === 'error'
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : autosave.status === 'saving'
+                  ? 'border-sky-200 bg-sky-50 text-sky-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-500'
+            }`}>
+              {autosave.status === 'saving'
+                ? 'Autosave...'
+                : autosave.status === 'saved'
+                  ? `Autosave ${autosave.at}`
+                  : autosave.status === 'error'
+                    ? 'Autosave falhou'
+                    : 'Autosave local'}
+            </span>
           </div>
         </div>
 
@@ -299,6 +420,18 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
             <p className="mt-2 text-xs text-gray-500">{doneQ} de {totalQ} perguntas respondidas</p>
           </section>
 
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm shadow-gray-200/60">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Biblioteca</p>
+            <p className="mt-2 text-sm font-semibold text-gray-950">Perguntas prontas reutilizáveis</p>
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="mt-3 w-full rounded-md bg-gray-950 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+            >
+              Abrir biblioteca
+            </button>
+          </section>
+
           {questionMode === 'guided' ? (
             <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Área do entrevistado</p>
@@ -334,7 +467,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
             </section>
           )}
 
-            <nav className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm shadow-gray-200/60">
+          <nav className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm shadow-gray-200/60">
             {SECTIONS.map((section, index) => {
               const stats = getSectionStats(section)
               return (
@@ -377,9 +510,18 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                     : currentSection.desc}
                 </p>
               </div>
-              <span className="w-fit rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
-                {questions.length} pergunta{questions.length !== 1 ? 's' : ''}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-fit rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
+                  {questions.length} pergunta{questions.length !== 1 ? 's' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
+                >
+                  Biblioteca
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -495,6 +637,13 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
           </div>
         </div>
       </div>
+
+      <QuestionLibraryDrawer
+        open={libraryOpen}
+        activeSectionId={currentSection.id}
+        onClose={() => setLibraryOpen(false)}
+        onAdd={addLibraryQuestion}
+      />
     </div>
   )
 }
