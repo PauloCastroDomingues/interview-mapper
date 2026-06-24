@@ -55,7 +55,7 @@ export default function Home() {
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:flex-nowrap sm:gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-950 text-xs font-bold text-white">
@@ -64,14 +64,14 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold leading-tight text-gray-950">Interview Mapper</p>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.3.0</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.3.1</span>
                 </div>
                 <p className="hidden text-xs text-gray-500 sm:block">Mapeamento de processos para Product Owners</p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:ml-auto sm:w-auto">
             <span className={`hidden rounded-md border px-2 py-1 text-[11px] font-semibold sm:inline-flex ${
               isRemoteSyncEnabled()
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -91,11 +91,11 @@ export default function Home() {
               </button>
             )}
 
-            <div className="flex rounded-md border border-gray-200 bg-gray-50 p-1">
+            <div className="grid w-full grid-cols-2 rounded-md border border-gray-200 bg-gray-50 p-1 sm:flex sm:w-auto">
               <button
                 type="button"
                 onClick={handleNew}
-                className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${
+                className={`rounded px-2.5 py-1.5 text-center text-sm font-semibold transition-colors sm:px-3 ${
                   tab === 'nova'
                     ? 'bg-white text-gray-950 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
@@ -106,7 +106,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => { setTab('entrevistas'); refresh() }}
-                className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${
+                className={`rounded px-2.5 py-1.5 text-center text-sm font-semibold transition-colors sm:px-3 ${
                   tab === 'entrevistas'
                     ? 'bg-white text-gray-950 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
