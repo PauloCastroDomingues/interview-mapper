@@ -140,12 +140,18 @@ export default function QuestionCard({
   }
 
   return (
-    <div className={`rounded-lg border bg-white transition-colors ${answered ? 'border-sky-200 ring-1 ring-sky-100' : 'border-gray-200'}`}>
+    <div className={`rounded-lg border border-l-4 bg-white shadow-sm shadow-gray-200/60 transition-colors ${
+      isCustom
+        ? 'border-l-emerald-500'
+        : isArea
+          ? 'border-l-amber-500'
+          : 'border-l-sky-500'
+    } ${answered ? 'border-sky-200 ring-1 ring-sky-100' : 'border-gray-200 hover:border-gray-300'}`}>
       <div className="px-4 py-3">
         <div className="flex items-start gap-3">
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-start gap-3 text-left"
+            className="flex min-w-0 flex-1 items-start gap-3 rounded-md text-left"
             onClick={() => setOpen(o => !o)}
           >
             <span className={`mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-md text-[11px] font-semibold ${
@@ -154,7 +160,7 @@ export default function QuestionCard({
               {num}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-snug text-gray-900">{displayQuestion}</p>
+              <p className="text-[15px] font-semibold leading-snug text-gray-950">{displayQuestion}</p>
               {hint && (
                 <p className="mt-1 text-xs leading-snug text-gray-500">{hint}</p>
               )}
@@ -200,7 +206,7 @@ export default function QuestionCard({
       </div>
 
       {open && (
-        <div className="border-t border-gray-100 px-4 pb-4" onPaste={handlePaste}>
+        <div className="border-t border-gray-100 bg-gray-50/60 px-4 pb-4" onPaste={handlePaste}>
           {isCustom && onUpdateCustom && (
             <div className="mt-3 grid gap-2 rounded-md border border-emerald-100 bg-emerald-50/60 p-3">
               <input
@@ -218,7 +224,7 @@ export default function QuestionCard({
           )}
 
           <textarea
-            className="mt-3 min-h-28 w-full resize-y rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            className="mt-3 min-h-32 w-full resize-y rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-800 shadow-sm outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             placeholder="Resposta, decisões, regras e observações relevantes."
             value={text}
             onChange={e => onChange(answerKey, { text: e.target.value, images })}
@@ -227,7 +233,7 @@ export default function QuestionCard({
           {images.length > 0 && (
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {images.map((img, i) => (
-                <div key={`${img.name}-${i}`} className="group relative rounded-md border border-gray-200 bg-gray-50 p-2">
+                <div key={`${img.name}-${i}`} className="group relative rounded-md border border-gray-200 bg-white p-2 shadow-sm">
                   <img
                     src={img.dataUrl}
                     alt={img.name}
@@ -250,14 +256,14 @@ export default function QuestionCard({
           )}
 
           <div
-            className="mt-3 flex flex-col gap-2 rounded-md border border-dashed border-gray-300 bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+            className="mt-3 flex flex-col gap-2 rounded-md border border-dashed border-sky-200 bg-sky-50/70 p-3 transition-colors hover:border-sky-300 sm:flex-row sm:items-center sm:justify-between"
             onDrop={handleDrop}
             onDragOver={e => e.preventDefault()}
             tabIndex={0}
           >
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prints e evidências</p>
-              <p className="mt-0.5 text-xs text-gray-500">Imagens coladas, arrastadas ou anexadas entram no PDF da entrevista.</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Prints e evidências</p>
+              <p className="mt-0.5 text-xs text-sky-800/80">Cole, arraste ou anexe imagens. Elas entram no PDF da entrevista.</p>
             </div>
             <div className="flex items-center gap-2">
               <input
