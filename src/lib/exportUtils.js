@@ -2,12 +2,14 @@ import { SECTIONS, AREAS, getAllQuestionsForSection, getAnswerForQuestion } from
 
 const AI_PROMPT = `Você é um Product Owner sênior, especialista em discovery, documentação de processos, requisitos funcionais, integrações e handoff para times de desenvolvimento.
 
-Você receberá uma entrevista de mapeamento de processo com respostas, perguntas específicas por área, perguntas personalizadas e evidências visuais. Sua tarefa é transformar esse material em documentação executiva e acionável.
+Você receberá uma entrevista de mapeamento de processo com respostas, perguntas específicas por área, perguntas personalizadas, transcrição livre, referências de áudio e evidências visuais. Sua tarefa é transformar esse material em documentação executiva e acionável.
 
 Regras de análise:
 - Use somente o conteúdo do PDF. Quando precisar inferir algo, marque claramente como inferência.
 - Não invente sistemas, campos, regras, integrações ou decisões que não estejam sustentados pelas respostas.
 - Diferencie fatos observados, hipóteses, riscos e perguntas em aberto.
+- Use a transcrição como contexto de apoio. Quando uma conclusão vier da transcrição, deixe isso explícito.
+- Se houver conflito entre resposta estruturada, síntese do entrevistador e transcrição, aponte a divergência e proponha validação.
 - Trate prints e evidências visuais como parte da documentação: descreva o que cada imagem sugere, quais campos aparecem e quais pontos precisam de validação humana.
 - Se um print estiver ilegível ou incompleto, liste exatamente o que precisa ser confirmado.
 - Escreva de forma objetiva, profissional e pronta para compartilhar com produto, operação, dados e desenvolvimento.
@@ -19,11 +21,12 @@ Entregue obrigatoriamente nesta estrutura:
 4. Regras de negócio: condições, exceções, aprovações, alçadas, SLAs e thresholds.
 5. Dados e integrações: fontes, campos obrigatórios, identificadores, transformações, destino, fonte da verdade e restrições de acesso.
 6. Evidências visuais: o que cada print comprova e onde ele apoia o fluxo.
-7. Riscos e fragilidades: classifique por impacto, probabilidade, evidência e mitigação sugerida.
-8. Oportunidades de melhoria: priorize por impacto, esforço e urgência.
-9. Backlog sugerido: épicos, histórias de usuário e critérios de aceite em formato "Dado/Quando/Então".
-10. Perguntas em aberto: liste o que precisa ser validado antes de especificar ou desenvolver.
-11. Recomendações para o time de desenvolvimento: eventos, APIs, logs, testes, monitoramento, migração e pontos de atenção.
+7. Evidências da transcrição: trechos, decisões citadas, dúvidas e pontos que precisam de confirmação.
+8. Riscos e fragilidades: classifique por impacto, probabilidade, evidência e mitigação sugerida.
+9. Oportunidades de melhoria: priorize por impacto, esforço e urgência.
+10. Backlog sugerido: épicos, histórias de usuário e critérios de aceite em formato "Dado/Quando/Então".
+11. Perguntas em aberto: liste o que precisa ser validado antes de especificar ou desenvolver.
+12. Recomendações para o time de desenvolvimento: eventos, APIs, logs, testes, monitoramento, migração e pontos de atenção.
 
 Formato esperado:
 - Use Markdown com títulos claros.
@@ -112,14 +115,60 @@ function summaryRows(summary = {}) {
   ].filter(([, value]) => value?.trim())
 }
 
+function transcriptionRows(transcription = {}) {
+  return [
+    ['Transcrição bruta', transcription.raw],
+    ['Pontos-chave', transcription.highlights],
+    ['Decisões citadas', transcription.decisions],
+    ['Dúvidas da transcrição', transcription.doubts],
+  ].filter(([, value]) => value?.trim())
+}
+
+function audioRefs(transcription = {}) {
+  return Array.isArray(transcription.audioRefs) ? transcription.audioRefs : []
+}
+
+function formatBytes(bytes = 0) {
+  if (!bytes) return '0 KB'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / (1024 ** exponent)
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
+}
+
+function formatAudioRef(audio = {}) {
+  return [
+    audio.name || 'Áudio sem nome',
+    formatBytes(audio.size || 0),
+    audio.type || '',
+  ].filter(Boolean).join(' · ')
+}
+
 export function generateExportText(interview) {
   const blocks = getQuestionBlocks(interview)
+  const transcription = transcriptionRows(interview.transcription)
+  const audios = audioRefs(interview.transcription)
   let out = `PROMPT PARA IA\n\n${AI_PROMPT}\n\n`
 
   out += `ENTREVISTA DE MAPEAMENTO\n\n`
   metaRows(interview).forEach(([label, value]) => {
     out += `${label}: ${value}\n`
   })
+
+  if (transcription.length || audios.length) {
+    out += `\n## Transcrição da entrevista\n\n`
+    transcription.forEach(([label, value]) => {
+      out += `${label}\n${value.trim()}\n\n`
+    })
+    if (audios.length) {
+      out += `Áudios referenciados\n`
+      audios.forEach(audio => {
+        out += `- ${formatAudioRef(audio)}\n`
+      })
+      out += '\n'
+    }
+  }
 
   blocks.forEach(({ section, questions }) => {
     out += `\n## ${section.label}\n\n`
@@ -155,6 +204,8 @@ function buildHtml(interview) {
   const { meta = {}, stats = {} } = interview
   const blocks = getQuestionBlocks(interview)
   const summary = summaryRows(interview.summary)
+  const transcription = transcriptionRows(interview.transcription)
+  const audios = audioRefs(interview.transcription)
   const title = meta.processo || meta.entrevistado || 'Entrevista de mapeamento'
 
   return `<!doctype html>
@@ -286,6 +337,30 @@ function buildHtml(interview) {
       margin-top: 8px;
       color: #1f2937;
     }
+    .transcript-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .transcript-item {
+      padding: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+      break-inside: avoid;
+    }
+    .transcript-item.full {
+      grid-column: 1 / -1;
+    }
+    .transcript-item h3 {
+      margin: 0 0 6px;
+    }
+    .audio-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #374151;
+    }
     .images {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -374,6 +449,29 @@ function buildHtml(interview) {
         </tbody>
       </table>
     </section>
+
+    ${transcription.length || audios.length ? `
+      <section>
+        <h2>Transcrição da entrevista</h2>
+        <p class="muted">Material de apoio extraído do áudio e organizado pelo entrevistador.</p>
+        <div class="transcript-grid">
+          ${transcription.map(([label, value]) => `
+            <article class="transcript-item ${label === 'Transcrição bruta' ? 'full' : ''}">
+              <h3>${escapeHtml(label)}</h3>
+              <div>${asParagraphs(value.trim())}</div>
+            </article>
+          `).join('')}
+          ${audios.length ? `
+            <article class="transcript-item full">
+              <h3>Áudios referenciados</h3>
+              <ul class="audio-list">
+                ${audios.map(audio => `<li>${escapeHtml(formatAudioRef(audio))}</li>`).join('')}
+              </ul>
+            </article>
+          ` : ''}
+        </div>
+      </section>
+    ` : ''}
 
     ${blocks.map(({ section, questions }) => `
       <section>

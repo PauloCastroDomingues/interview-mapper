@@ -32,6 +32,13 @@ const EMPTY_SUMMARY = {
 }
 
 const EMPTY_CUSTOM_DRAFT = { q: '', hint: '' }
+const EMPTY_TRANSCRIPTION = {
+  raw: '',
+  highlights: '',
+  decisions: '',
+  doubts: '',
+  audioRefs: [],
+}
 const QUESTION_MODES = {
   guided: {
     label: 'Guiada',
@@ -45,6 +52,35 @@ const QUESTION_MODES = {
   },
 }
 
+function normalizeTranscription(transcription = {}) {
+  const audioRefs = Array.isArray(transcription.audioRefs) ? transcription.audioRefs : []
+
+  return {
+    ...EMPTY_TRANSCRIPTION,
+    raw: transcription.raw || '',
+    highlights: transcription.highlights || '',
+    decisions: transcription.decisions || '',
+    doubts: transcription.doubts || '',
+    audioRefs: audioRefs.map((audio, index) => ({
+      id: audio.id || `audio_${index}_${audio.name || 'arquivo'}`,
+      name: audio.name || 'Áudio sem nome',
+      size: Number(audio.size || 0),
+      type: audio.type || 'audio',
+      lastModified: audio.lastModified || null,
+      addedAt: audio.addedAt || '',
+    })),
+  }
+}
+
+function formatBytes(bytes = 0) {
+  if (!bytes) return '0 KB'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / (1024 ** exponent)
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
+}
+
 function hasDraftContent(interview) {
   const hasMeta = Object.entries(interview.meta || {}).some(([key, value]) => (
     !['data', 'duracao'].includes(key) && String(value || '').trim()
@@ -54,7 +90,15 @@ function hasDraftContent(interview) {
   ))
   const hasCustomQuestions = Object.values(interview.customQuestions || {}).some(items => items?.length > 0)
   const hasSummary = Object.values(interview.summary || {}).some(value => String(value || '').trim())
-  return hasMeta || hasAnswers || hasCustomQuestions || hasSummary
+  const transcription = normalizeTranscription(interview.transcription)
+  const hasTranscription = Boolean(
+    transcription.raw.trim()
+    || transcription.highlights.trim()
+    || transcription.decisions.trim()
+    || transcription.doubts.trim()
+    || transcription.audioRefs.length
+  )
+  return hasMeta || hasAnswers || hasCustomQuestions || hasSummary || hasTranscription
 }
 
 function createInterviewPayload({
@@ -65,6 +109,7 @@ function createInterviewPayload({
   selectedAreas,
   answers,
   customQuestions,
+  transcription,
   summary,
   totalQ,
   doneQ,
@@ -82,6 +127,7 @@ function createInterviewPayload({
     selectedAreas,
     customQuestions: cleanCustomQuestions,
     answers: cleanAnswers,
+    transcription: normalizeTranscription(transcription),
     summary,
     stats: {
       totalQuestions: totalQ,
@@ -113,6 +159,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   const [answers, setAnswers] = useState(initialAnswers)
   const [customQuestions, setCustomQuestions] = useState(initialCustomQuestions)
   const [customDraft, setCustomDraft] = useState(EMPTY_CUSTOM_DRAFT)
+  const [transcription, setTranscription] = useState(normalizeTranscription(initialData?.transcription))
   const [summary, setSummary] = useState({ ...EMPTY_SUMMARY, ...(initialData?.summary || {}) })
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -136,6 +183,33 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
   const handleAnswer = useCallback((key, value) => {
     setAnswers(prev => ({ ...prev, [key]: value }))
   }, [])
+
+  function updateTranscription(field, value) {
+    setTranscription(prev => ({ ...prev, [field]: value }))
+  }
+
+  function addAudioRefs(files) {
+    const nextFiles = Array.from(files || [])
+      .filter(file => file?.name)
+      .map((file, index) => ({
+        id: `audio_${Date.now()}_${index}_${file.name}`,
+        name: file.name,
+        size: file.size || 0,
+        type: file.type || 'audio',
+        lastModified: file.lastModified || null,
+        addedAt: new Date().toISOString(),
+      }))
+
+    if (!nextFiles.length) return
+    setTranscription(prev => ({ ...prev, audioRefs: [...(prev.audioRefs || []), ...nextFiles] }))
+  }
+
+  function removeAudioRef(id) {
+    setTranscription(prev => ({
+      ...prev,
+      audioRefs: (prev.audioRefs || []).filter(audio => audio.id !== id),
+    }))
+  }
 
   function getSectionStats(section) {
     const sectionQuestions = getAllQuestionsForSection(section.id, selectedAreas, customQuestions, questionOptions)
@@ -208,6 +282,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
       selectedAreas,
       answers,
       customQuestions,
+      transcription,
       summary,
       totalQ,
       doneQ,
@@ -230,6 +305,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
       selectedAreas,
       answers,
       customQuestions,
+      transcription,
       summary,
       totalQ,
       doneQ,
@@ -254,7 +330,7 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
     }, 1800)
 
     return () => window.clearTimeout(timer)
-  }, [answers, customQuestions, doneQ, initialData, interviewId, manualOnly, meta, pct, questionMode, selectedAreas, summary, totalQ])
+  }, [answers, customQuestions, doneQ, initialData, interviewId, manualOnly, meta, pct, questionMode, selectedAreas, summary, totalQ, transcription])
 
   async function handleSave() {
     setSaving(true)
@@ -576,6 +652,117 @@ export default function InterviewForm({ initialData, onSave, onCancel }) {
                 </p>
               </div>
             )}
+          </section>
+
+          <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Transcrição da entrevista</p>
+                  <p className="mt-1 text-xs text-gray-500">Cole a transcrição e organize sinais importantes para a documentação.</p>
+                </div>
+                <span className="w-fit rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-500">
+                  {transcription.audioRefs.length} áudio{transcription.audioRefs.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 p-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,.65fr)]">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Transcrição bruta</label>
+                  <textarea
+                    className="min-h-64 w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    placeholder="Cole aqui o texto transcrito do áudio."
+                    value={transcription.raw}
+                    onChange={e => updateTranscription('raw', e.target.value)}
+                  />
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Áudios de referência</p>
+                  <input
+                    id="audio-reference-input"
+                    type="file"
+                    accept="audio/*"
+                    multiple
+                    className="sr-only"
+                    onChange={e => {
+                      addAudioRefs(e.target.files)
+                      e.target.value = ''
+                    }}
+                  />
+                  <label
+                    htmlFor="audio-reference-input"
+                    className="mt-3 flex cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
+                  >
+                    Adicionar áudio
+                  </label>
+
+                  <div className="mt-3 space-y-2">
+                    {transcription.audioRefs.length > 0 ? (
+                      transcription.audioRefs.map(audio => (
+                        <div key={audio.id} className="rounded-md border border-gray-200 bg-white p-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-gray-900">{audio.name}</p>
+                              <p className="mt-0.5 text-[11px] text-gray-500">
+                                {formatBytes(audio.size)}{audio.type ? ` · ${audio.type}` : ''}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeAudioRef(audio.id)}
+                              className="shrink-0 rounded border border-red-100 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-100"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-md border border-dashed border-gray-300 bg-white px-3 py-4 text-center text-xs text-gray-500">
+                        Nenhum áudio referenciado.
+                      </p>
+                    )}
+                  </div>
+
+                  <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
+                    O app salva apenas nome, tipo e tamanho. O arquivo original continua fora do sistema.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Pontos-chave</label>
+                  <textarea
+                    className="min-h-28 w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    placeholder="Trechos, frases e sinais que merecem atenção."
+                    value={transcription.highlights}
+                    onChange={e => updateTranscription('highlights', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Decisões citadas</label>
+                  <textarea
+                    className="min-h-28 w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    placeholder="Acordos, regras, exceções e responsáveis mencionados."
+                    value={transcription.decisions}
+                    onChange={e => updateTranscription('decisions', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500">Dúvidas da transcrição</label>
+                  <textarea
+                    className="min-h-28 w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    placeholder="Falas ambíguas, termos a validar e pontos incompletos."
+                    value={transcription.doubts}
+                    onChange={e => updateTranscription('doubts', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">

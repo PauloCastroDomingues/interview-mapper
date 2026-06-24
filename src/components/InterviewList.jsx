@@ -35,6 +35,19 @@ function countCustomQuestions(customQuestions = {}) {
   return Object.values(customQuestions).reduce((acc, questions) => acc + (questions?.length || 0), 0)
 }
 
+function hasTranscriptionContent(transcription = {}) {
+  return Boolean(
+    transcription.raw?.trim()
+    || transcription.highlights?.trim()
+    || transcription.decisions?.trim()
+    || transcription.doubts?.trim()
+  )
+}
+
+function countAudioRefs(transcription = {}) {
+  return Array.isArray(transcription.audioRefs) ? transcription.audioRefs.length : 0
+}
+
 export default function InterviewList({ interviews, onEdit, onRefresh }) {
   const [error, setError] = useState('')
 
@@ -98,6 +111,8 @@ export default function InterviewList({ interviews, onEdit, onRefresh }) {
             .filter(Boolean)
           const imgCount = countImages(interview.answers)
           const customCount = countCustomQuestions(interview.customQuestions)
+          const hasTranscript = hasTranscriptionContent(interview.transcription)
+          const audioCount = countAudioRefs(interview.transcription)
           const isManual = interview.questionMode === 'manual'
 
           return (
@@ -128,6 +143,16 @@ export default function InterviewList({ interviews, onEdit, onRefresh }) {
                     {imgCount > 0 && (
                       <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
                         {imgCount} print{imgCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {hasTranscript && (
+                      <span className="rounded-md border border-violet-100 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        transcrição
+                      </span>
+                    )}
+                    {audioCount > 0 && (
+                      <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                        {audioCount} áudio{audioCount !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
