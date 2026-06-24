@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.3.0`
+**Versão atual:** `v1.3.1`
 
-Esta versão transforma o app em um workspace mais completo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, autosave local, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, abas de trabalho, autosave local, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
