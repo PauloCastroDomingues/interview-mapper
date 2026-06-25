@@ -1,20 +1,42 @@
 const KEY = 'interview_mapper_v1'
 const GAS_URL = process.env.NEXT_PUBLIC_GAS_URL?.trim()
 const BACKUP_APP_ID = 'interview-mapper'
-const BACKUP_SCHEMA_VERSION = 1
+const BACKUP_SCHEMA_VERSION = 2
+const EMPTY_WORKSPACE = { discoveries: {} }
+
+function normalizeWorkspace(workspace = {}) {
+  const discoveries = workspace?.discoveries && typeof workspace.discoveries === 'object'
+    ? workspace.discoveries
+    : {}
+
+  return {
+    ...EMPTY_WORKSPACE,
+    ...workspace,
+    discoveries,
+  }
+}
 
 function load() {
-  if (typeof window === 'undefined') return { interviews: [] }
+  if (typeof window === 'undefined') return { interviews: [], workspace: EMPTY_WORKSPACE }
   try {
-    return JSON.parse(localStorage.getItem(KEY) || '{"interviews":[]}')
+    const data = JSON.parse(localStorage.getItem(KEY) || '{"interviews":[]}')
+    return {
+      ...data,
+      interviews: Array.isArray(data.interviews) ? data.interviews : [],
+      workspace: normalizeWorkspace(data.workspace),
+    }
   } catch {
-    return { interviews: [] }
+    return { interviews: [], workspace: EMPTY_WORKSPACE }
   }
 }
 
 function save(data) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(data))
+    localStorage.setItem(KEY, JSON.stringify({
+      ...data,
+      interviews: Array.isArray(data.interviews) ? data.interviews : [],
+      workspace: normalizeWorkspace(data.workspace),
+    }))
   } catch (err) {
     throw new Error('Não foi possível salvar localmente. Remova alguns prints/imagens e tente de novo.')
   }
@@ -23,6 +45,11 @@ function save(data) {
 function makeId() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID()
   return `iv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function makeWorkspaceId(prefix = 'item') {
+  if (globalThis.crypto?.randomUUID) return `${prefix}_${crypto.randomUUID()}`
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 }
 
 function sortInterviews(interviews = []) {
@@ -86,8 +113,15 @@ function parseBackupContent(content) {
     throw new Error('Arquivo de backup inválido. Escolha um JSON exportado pelo Interview Mapper.')
   }
 
-  if (Array.isArray(parsed)) return parsed
-  if (Array.isArray(parsed?.interviews)) return parsed.interviews
+  if (Array.isArray(parsed)) {
+    return { interviews: parsed, workspace: EMPTY_WORKSPACE }
+  }
+  if (Array.isArray(parsed?.interviews)) {
+    return {
+      interviews: parsed.interviews,
+      workspace: normalizeWorkspace(parsed.workspace),
+    }
+  }
 
   throw new Error('Backup sem entrevistas encontradas.')
 }
@@ -101,6 +135,20 @@ function normalizeImportedInterview(interview) {
     id: interview.id || makeId(),
     createdAt: interview.createdAt || interview.updatedAt || now,
     updatedAt: interview.updatedAt || interview.createdAt || now,
+  }
+}
+
+function mergeWorkspace(localWorkspace = EMPTY_WORKSPACE, importedWorkspace = EMPTY_WORKSPACE) {
+  const local = normalizeWorkspace(localWorkspace)
+  const imported = normalizeWorkspace(importedWorkspace)
+
+  return {
+    ...local,
+    ...imported,
+    discoveries: {
+      ...local.discoveries,
+      ...imported.discoveries,
+    },
   }
 }
 
@@ -130,6 +178,40 @@ export function getInterview(id) {
   return getInterviews().find(i => i.id === id) || null
 }
 
+export function getPOWorkspace() {
+  return normalizeWorkspace(load().workspace)
+}
+
+export function savePOWorkspace(workspace) {
+  const data = load()
+  data.workspace = normalizeWorkspace(workspace)
+  save(data)
+  return getPOWorkspace()
+}
+
+export function saveDiscoveryWorkspace(discoveryId, patch = {}) {
+  const data = load()
+  const workspace = normalizeWorkspace(data.workspace)
+  const current = workspace.discoveries[discoveryId] || {}
+  const now = new Date().toISOString()
+
+  workspace.discoveries[discoveryId] = {
+    ...current,
+    ...patch,
+    id: discoveryId,
+    createdAt: current.createdAt || patch.createdAt || now,
+    updatedAt: now,
+  }
+
+  data.workspace = workspace
+  save(data)
+  return workspace.discoveries[discoveryId]
+}
+
+export function makePOItemId(prefix) {
+  return makeWorkspaceId(prefix)
+}
+
 export function buildLocalBackupFilename() {
   const date = new Date().toISOString().split('T')[0]
   return `${BACKUP_APP_ID}-backup-${date}.json`
@@ -137,17 +219,20 @@ export function buildLocalBackupFilename() {
 
 export function serializeLocalBackup() {
   const interviews = getInterviews()
+  const workspace = getPOWorkspace()
   return JSON.stringify({
     app: BACKUP_APP_ID,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     interviewCount: interviews.length,
     interviews,
+    workspace,
   }, null, 2)
 }
 
 export function importLocalBackup(content, options = {}) {
-  const imported = parseBackupContent(content)
+  const backup = parseBackupContent(content)
+  const imported = backup.interviews
     .map(normalizeImportedInterview)
     .filter(Boolean)
 
@@ -158,6 +243,9 @@ export function importLocalBackup(content, options = {}) {
   const data = load()
   const currentInterviews = options.merge === false ? [] : data.interviews || []
   data.interviews = mergeInterviews(currentInterviews, imported)
+  data.workspace = options.merge === false
+    ? normalizeWorkspace(backup.workspace)
+    : mergeWorkspace(data.workspace, backup.workspace)
   save(data)
 
   return {

@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.3.2`
+**Versão atual:** `v1.4.0`
 
-Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, abas de trabalho, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, aba PO para consolidar discoveries, backlog estruturado, exportação Markdown/CSV, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -20,6 +20,8 @@ Esta versão transforma o app em um workspace mais executivo para Product Owners
 - **Autosave local** — rascunhos são salvos automaticamente no navegador sem disparar sync remoto a cada digitação
 - **Backup e importação JSON** — exporte todas as entrevistas do navegador e restaure em outra sessão ou máquina
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
+- **Aba PO** — consolida entrevistas por processo, registra análise PO e estrutura backlog priorizado
+- **Exportações PO** — gere documento de discovery em Markdown e backlog em CSV
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
 - **Exportação em PDF com prompt oculto para IA** — o PDF fica limpo para leitura humana, mas mantém instruções internas para a IA
 
@@ -165,17 +167,19 @@ Não suba arquivos `.env`, `.env.local`, `.env.production` ou similares para o G
 interview-mapper/
 ├── src/
 │   ├── app/
-│   │   ├── page.js          # Roteador de abas (Nova entrevista | Entrevistas)
+│   │   ├── page.js          # Roteador de abas (Nova entrevista | Entrevistas | PO)
 │   │   ├── layout.js        # Layout raiz com metadados
 │   │   └── globals.css      # Estilos globais + Tailwind
 │   ├── components/
 │   │   ├── InterviewForm.jsx  # Formulário principal
 │   │   ├── InterviewList.jsx  # Lista de entrevistas salvas
+│   │   ├── POWorkbench.jsx    # Workspace de análise PO, discovery e backlog
 │   │   ├── QuestionLibraryDrawer.jsx # Biblioteca lateral de perguntas
 │   │   └── QuestionCard.jsx   # Card individual com notas + imagens
 │   └── lib/
 │       ├── questions.js       # Perguntas fixas, por área e personalizadas
-│       ├── storage.js         # CRUD no localStorage
+│       ├── storage.js         # CRUD local, backup/importação e workspace PO
+│       ├── poUtils.js         # Agrupamento, métricas e exportações PO
 │       └── exportUtils.js     # Geração do PDF com prompt de IA
 ├── apps-script/
 │   └── Code.gs              # Backend opcional (Google Sheets)

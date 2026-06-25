@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import InterviewForm from '@/components/InterviewForm'
 import InterviewList from '@/components/InterviewList'
+import POWorkbench from '@/components/POWorkbench'
 import {
   buildLocalBackupFilename,
   getInterviews,
@@ -118,7 +119,7 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold leading-tight text-gray-950">Interview Mapper</p>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.3.2</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.4.0</span>
                 </div>
                 <p className="hidden text-xs text-gray-500 sm:block">Mapeamento de processos para Product Owners</p>
               </div>
@@ -169,7 +170,7 @@ export default function Home() {
               Importar
             </button>
 
-            <div className="grid w-full grid-cols-2 rounded-md border border-gray-200 bg-gray-50 p-1 sm:flex sm:w-auto">
+            <div className="grid w-full grid-cols-3 rounded-md border border-gray-200 bg-gray-50 p-1 sm:flex sm:w-auto">
               <button
                 type="button"
                 onClick={handleNew}
@@ -196,6 +197,17 @@ export default function Home() {
                     {interviews.length}
                   </span>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTab('po'); refresh() }}
+                className={`rounded px-2.5 py-1.5 text-center text-sm font-semibold transition-colors sm:px-3 ${
+                  tab === 'po'
+                    ? 'bg-white text-gray-950 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                PO
               </button>
             </div>
           </div>
@@ -247,12 +259,14 @@ export default function Home() {
             onSave={handleSaveAndRefresh}
             onCancel={editing ? () => { setEditing(null) } : undefined}
           />
-        ) : (
+        ) : tab === 'entrevistas' ? (
           <InterviewList
             interviews={interviews}
             onEdit={handleEdit}
             onRefresh={refresh}
           />
+        ) : (
+          <POWorkbench interviews={interviews} />
         )}
       </main>
     </>
