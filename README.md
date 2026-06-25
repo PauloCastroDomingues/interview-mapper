@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.3.1`
+**Versão atual:** `v1.3.2`
 
-Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, abas de trabalho, autosave local, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, abas de trabalho, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -18,6 +18,7 @@ Esta versão transforma o app em um workspace mais executivo para Product Owners
 - **Prints/imagens com legenda** — anexe, arraste ou cole imagens e descreva o que cada evidência comprova
 - **Transcrição manual gratuita** — cole a transcrição do áudio, destaque pontos-chave e referencie arquivos sem fazer upload pesado
 - **Autosave local** — rascunhos são salvos automaticamente no navegador sem disparar sync remoto a cada digitação
+- **Backup e importação JSON** — exporte todas as entrevistas do navegador e restaure em outra sessão ou máquina
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
 - **Exportação em PDF com prompt oculto para IA** — o PDF fica limpo para leitura humana, mas mantém instruções internas para a IA
@@ -29,6 +30,7 @@ Esta versão transforma o app em um workspace mais executivo para Product Owners
 O projeto foi pensado para uso pessoal sem custo:
 
 - Por padrão, tudo funciona no navegador usando `localStorage`.
+- Use **Backup** para baixar um `.json` com todas as entrevistas locais e **Importar** para restaurar ou mesclar esse arquivo depois.
 - O Google Sheets é opcional e serve como backup/sync gratuito via Google Apps Script.
 - Os prints/imagens ficam completos apenas no navegador local. No Google Sheets são enviados apenas os nomes das imagens, para evitar limite de célula e manter o sync leve.
 - O áudio original não é enviado nem armazenado pelo app. A entrevista guarda apenas transcrição em texto e metadados dos arquivos referenciados.
