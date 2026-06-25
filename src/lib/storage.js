@@ -1,5 +1,7 @@
 const KEY = 'interview_mapper_v1'
 const GAS_URL = process.env.NEXT_PUBLIC_GAS_URL?.trim()
+const BACKUP_APP_ID = 'interview-mapper'
+const BACKUP_SCHEMA_VERSION = 1
 
 function load() {
   if (typeof window === 'undefined') return { interviews: [] }
@@ -75,6 +77,33 @@ function mergeInterviews(localInterviews = [], remoteInterviews = []) {
   return sortInterviews([...byId.values()])
 }
 
+function parseBackupContent(content) {
+  let parsed
+
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    throw new Error('Arquivo de backup inválido. Escolha um JSON exportado pelo Interview Mapper.')
+  }
+
+  if (Array.isArray(parsed)) return parsed
+  if (Array.isArray(parsed?.interviews)) return parsed.interviews
+
+  throw new Error('Backup sem entrevistas encontradas.')
+}
+
+function normalizeImportedInterview(interview) {
+  if (!interview || typeof interview !== 'object' || Array.isArray(interview)) return null
+
+  const now = new Date().toISOString()
+  return {
+    ...interview,
+    id: interview.id || makeId(),
+    createdAt: interview.createdAt || interview.updatedAt || now,
+    updatedAt: interview.updatedAt || interview.createdAt || now,
+  }
+}
+
 async function postToRemote(payload) {
   if (!isRemoteSyncEnabled()) return { ok: true, skipped: true }
 
@@ -99,6 +128,43 @@ export function getInterviews() {
 
 export function getInterview(id) {
   return getInterviews().find(i => i.id === id) || null
+}
+
+export function buildLocalBackupFilename() {
+  const date = new Date().toISOString().split('T')[0]
+  return `${BACKUP_APP_ID}-backup-${date}.json`
+}
+
+export function serializeLocalBackup() {
+  const interviews = getInterviews()
+  return JSON.stringify({
+    app: BACKUP_APP_ID,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    interviewCount: interviews.length,
+    interviews,
+  }, null, 2)
+}
+
+export function importLocalBackup(content, options = {}) {
+  const imported = parseBackupContent(content)
+    .map(normalizeImportedInterview)
+    .filter(Boolean)
+
+  if (!imported.length) {
+    throw new Error('Nenhuma entrevista válida foi encontrada no backup.')
+  }
+
+  const data = load()
+  const currentInterviews = options.merge === false ? [] : data.interviews || []
+  data.interviews = mergeInterviews(currentInterviews, imported)
+  save(data)
+
+  return {
+    interviews: getInterviews(),
+    importedCount: imported.length,
+    totalCount: data.interviews.length,
+  }
 }
 
 export async function saveInterview(interview, options = {}) {
