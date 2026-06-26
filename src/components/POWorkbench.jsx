@@ -63,6 +63,9 @@ const PO_TABS = [
   { id: 'evidence', label: 'Evidências' },
 ]
 
+const FIELD_CLASS = 'rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+const TEXTAREA_CLASS = 'min-h-20 resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
+
 function slugPart(value = 'discovery') {
   return String(value || 'discovery')
     .normalize('NFD')
@@ -72,6 +75,49 @@ function slugPart(value = 'discovery') {
     .toLowerCase() || 'discovery'
 }
 
+function SectionPanel({ title, children, actions }) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <div className="flex flex-col gap-2 border-b border-gray-200 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">{title}</p>
+        {actions}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function MetricCard({ label, value }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-gray-950">{value}</p>
+    </div>
+  )
+}
+
+function EmptyState({ children }) {
+  return (
+    <p className="px-4 py-10 text-center text-sm text-gray-500">{children}</p>
+  )
+}
+
+function StatusBadge({ children, tone = 'gray' }) {
+  const tones = {
+    gray: 'border-gray-200 bg-gray-50 text-gray-600',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    red: 'border-red-100 bg-red-50 text-red-600',
+    dark: 'border-gray-900 bg-gray-950 text-white',
+  }
+
+  return (
+    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${tones[tone] || tones.gray}`}>
+      {children}
+    </span>
+  )
+}
+
 function FieldSelect({ label, value, options, onChange }) {
   return (
     <label className="grid gap-1">
@@ -79,7 +125,7 @@ function FieldSelect({ label, value, options, onChange }) {
       <select
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-800 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+        className={FIELD_CLASS}
       >
         {options.map(option => (
           <option key={option} value={option}>{option}</option>
@@ -262,7 +308,7 @@ export default function POWorkbench({ interviews = [] }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-[1440px] px-4 py-5 lg:px-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">PO Workspace</p>
@@ -272,14 +318,14 @@ export default function POWorkbench({ interviews = [] }) {
           <button
             type="button"
             onClick={exportMarkdown}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 transition-colors hover:border-sky-300 hover:text-sky-700"
+            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
           >
             Exportar discovery
           </button>
           <button
             type="button"
             onClick={exportCsv}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 transition-colors hover:border-sky-300 hover:text-sky-700"
+            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
           >
             Exportar backlog
           </button>
@@ -294,7 +340,7 @@ export default function POWorkbench({ interviews = [] }) {
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="space-y-3">
-          <section className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm shadow-gray-200/60">
+          <section className="rounded-lg border border-gray-200 bg-white p-3">
             <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Processos</p>
             <div className="space-y-1">
               {groups.map(group => (
@@ -312,7 +358,7 @@ export default function POWorkbench({ interviews = [] }) {
                   <span className={`mt-0.5 block text-[11px] ${
                     selectedId === group.id ? 'text-white/70' : 'text-gray-400'
                   }`}>
-                    {group.stats.interviewCount} entrevista{group.stats.interviewCount !== 1 ? 's' : ''} · {group.discovery.status}
+                    {group.stats.interviewCount} entrevista{group.stats.interviewCount !== 1 ? 's' : ''}
                   </span>
                 </button>
               ))}
@@ -321,7 +367,7 @@ export default function POWorkbench({ interviews = [] }) {
         </aside>
 
         <div className="space-y-4">
-          <section className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm shadow-gray-200/60">
+          <section className="rounded-lg border border-gray-200 bg-white p-2">
             <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-6" role="tablist" aria-label="Áreas do workspace PO">
               {PO_TABS.map(item => {
                 const activeTab = poTab === item.id
@@ -347,122 +393,131 @@ export default function POWorkbench({ interviews = [] }) {
 
           {poTab === 'overview' && (
             <>
-              <section className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm shadow-gray-200/60 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
-            <label className="grid gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Processo</span>
-              <input
-                value={discovery.title || ''}
-                onChange={event => patchDiscovery({ title: event.target.value })}
-                className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-              />
-            </label>
-            <FieldSelect
-              label="Status"
-              value={discovery.status || 'Coletando'}
-              options={DISCOVERY_STATUSES}
-              onChange={value => patchDiscovery({ status: value })}
-            />
-            <label className="grid gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">PO responsável</span>
-              <input
-                value={discovery.owner || ''}
-                onChange={event => patchDiscovery({ owner: event.target.value })}
-                className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-              />
-            </label>
-            <label className="grid gap-1 lg:col-span-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Objetivo do discovery</span>
-              <input
-                value={discovery.objective || ''}
-                onChange={event => patchDiscovery({ objective: event.target.value })}
-                className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sistemas</span>
-              <input
-                value={discovery.systems || ''}
-                onChange={event => patchDiscovery({ systems: event.target.value })}
-                className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-              />
-            </label>
-              </section>
+              <SectionPanel title="Contexto do discovery">
+                <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Processo</span>
+                    <input
+                      value={discovery.title || ''}
+                      onChange={event => patchDiscovery({ title: event.target.value })}
+                      className={FIELD_CLASS}
+                    />
+                  </label>
+                  <FieldSelect
+                    label="Status"
+                    value={discovery.status || 'Coletando'}
+                    options={DISCOVERY_STATUSES}
+                    onChange={value => patchDiscovery({ status: value })}
+                  />
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">PO responsável</span>
+                    <input
+                      value={discovery.owner || ''}
+                      onChange={event => patchDiscovery({ owner: event.target.value })}
+                      className={FIELD_CLASS}
+                    />
+                  </label>
+                  <label className="grid gap-1 lg:col-span-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Objetivo do discovery</span>
+                    <input
+                      value={discovery.objective || ''}
+                      onChange={event => patchDiscovery({ objective: event.target.value })}
+                      className={FIELD_CLASS}
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sistemas</span>
+                    <input
+                      value={discovery.systems || ''}
+                      onChange={event => patchDiscovery({ systems: event.target.value })}
+                      className={FIELD_CLASS}
+                    />
+                  </label>
+                </div>
+              </SectionPanel>
 
               <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            {[
-              ['Entrevistas', active.stats.interviewCount],
-              ['Progresso', `${active.stats.completion}%`],
-              ['Respostas', `${active.stats.answeredQuestions}/${active.stats.totalQuestions || 0}`],
-              ['Evidências', active.stats.images],
-              ['Backlog', backlog.length],
-              ['Maturidade', `${maturity.score}%`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm shadow-gray-200/60">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                <p className="mt-1 text-xl font-semibold text-gray-950">{value}</p>
-              </div>
-            ))}
+                {[
+                  ['Entrevistas', active.stats.interviewCount],
+                  ['Progresso', `${active.stats.completion}%`],
+                  ['Respostas', `${active.stats.answeredQuestions}/${active.stats.totalQuestions || 0}`],
+                  ['Evidências', active.stats.images],
+                  ['Backlog', backlog.length],
+                  ['Maturidade', `${maturity.score}%`],
+                ].map(([label, value]) => (
+                  <MetricCard key={label} label={label} value={value} />
+                ))}
               </section>
 
-              {maturity.missing.length > 0 && (
-                <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                    Lacunas para ficar pronto para desenvolvimento
-                  </p>
-                  <p className="mt-1 text-sm leading-relaxed text-amber-900">
-                    {maturity.missing.slice(0, 6).join(' · ')}
-                  </p>
-                </section>
-              )}
+              <SectionPanel title="Prontidão para desenvolvimento">
+                <div className="p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-950">{maturity.score}% de maturidade</p>
+                      <p className="mt-0.5 text-xs text-gray-500">{maturity.completed}/{maturity.total} critérios completos</p>
+                    </div>
+                    <StatusBadge tone={maturity.score >= 80 ? 'green' : maturity.score >= 55 ? 'amber' : 'gray'}>
+                      {maturity.score >= 80 ? 'Próximo de dev' : maturity.score >= 55 ? 'Em refinamento' : 'Em descoberta'}
+                    </StatusBadge>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full ${maturity.score >= 80 ? 'bg-emerald-500' : maturity.score >= 55 ? 'bg-amber-500' : 'bg-sky-500'}`}
+                      style={{ width: `${maturity.score}%` }}
+                    />
+                  </div>
+                  {maturity.missing.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {maturity.missing.slice(0, 8).map(item => (
+                        <StatusBadge key={item} tone="amber">{item}</StatusBadge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </SectionPanel>
             </>
           )}
 
           {poTab === 'analysis' && (
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Análise PO</p>
-            </div>
-            <div className="grid gap-0">
-              {ANALYSIS_FIELDS.map(([label, field]) => (
-                <div key={field} className="grid border-b border-gray-100 last:border-b-0 lg:grid-cols-[220px_1fr]">
-                  <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600 lg:border-b-0 lg:border-r">
-                    {label}
+            <SectionPanel title="Análise PO">
+              <div className="grid gap-0">
+                {ANALYSIS_FIELDS.map(([label, field]) => (
+                  <div key={field} className="grid border-b border-gray-100 last:border-b-0 lg:grid-cols-[220px_1fr]">
+                    <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-3 text-xs font-semibold text-gray-600 lg:border-b-0 lg:border-r">
+                      {label}
+                    </div>
+                    <textarea
+                      value={analysis[field] || ''}
+                      onChange={event => patchAnalysis(field, event.target.value)}
+                      className="min-h-28 resize-y bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:bg-sky-50/30"
+                      placeholder={`Registre ${label.toLowerCase()}.`}
+                    />
                   </div>
-                  <textarea
-                    value={analysis[field] || ''}
-                    onChange={event => patchAnalysis(field, event.target.value)}
-                    className="min-h-28 resize-y bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:bg-sky-50/30"
-                    placeholder={`Registre ${label.toLowerCase()}.`}
-                  />
-                </div>
-              ))}
-            </div>
-            </section>
+                ))}
+              </div>
+            </SectionPanel>
           )}
 
           {poTab === 'map' && (
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Mapa AS-IS / TO-BE</p>
-            </div>
+            <SectionPanel title="Mapa AS-IS / TO-BE">
             <div className="grid gap-3 p-4">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_140px]">
                 <input
                   value={flowDraft.name}
                   onChange={event => setFlowDraft(prev => ({ ...prev, name: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Etapa"
                 />
                 <input
                   value={flowDraft.actor}
                   onChange={event => setFlowDraft(prev => ({ ...prev, actor: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Ator"
                 />
                 <input
                   value={flowDraft.system}
                   onChange={event => setFlowDraft(prev => ({ ...prev, system: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Sistema"
                 />
               </div>
@@ -470,13 +525,13 @@ export default function POWorkbench({ interviews = [] }) {
                 <textarea
                   value={flowDraft.action}
                   onChange={event => setFlowDraft(prev => ({ ...prev, action: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Ação AS-IS"
                 />
                 <textarea
                   value={flowDraft.tobe}
                   onChange={event => setFlowDraft(prev => ({ ...prev, tobe: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Proposta TO-BE"
                 />
               </div>
@@ -484,19 +539,19 @@ export default function POWorkbench({ interviews = [] }) {
                 <input
                   value={flowDraft.input}
                   onChange={event => setFlowDraft(prev => ({ ...prev, input: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Entrada"
                 />
                 <input
                   value={flowDraft.output}
                   onChange={event => setFlowDraft(prev => ({ ...prev, output: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Saída"
                 />
                 <input
                   value={flowDraft.problem}
                   onChange={event => setFlowDraft(prev => ({ ...prev, problem: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Problema"
                 />
               </div>
@@ -582,36 +637,33 @@ export default function POWorkbench({ interviews = [] }) {
                   </article>
                 ))
               ) : (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma etapa mapeada ainda.</p>
+                <EmptyState>Nenhuma etapa mapeada ainda.</EmptyState>
               )}
             </div>
-            </section>
+            </SectionPanel>
           )}
 
           {poTab === 'decisions' && (
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Decisões e pendências</p>
-            </div>
+            <SectionPanel title="Decisões e pendências">
             <div className="grid gap-3 p-4">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_140px_150px]">
                 <input
                   value={decisionDraft.title}
                   onChange={event => setDecisionDraft(prev => ({ ...prev, title: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Decisão ou pendência"
                 />
                 <input
                   value={decisionDraft.owner}
                   onChange={event => setDecisionDraft(prev => ({ ...prev, owner: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                   placeholder="Dono"
                 />
                 <input
                   type="date"
                   value={decisionDraft.dueDate}
                   onChange={event => setDecisionDraft(prev => ({ ...prev, dueDate: event.target.value }))}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={FIELD_CLASS}
                 />
                 <FieldSelect
                   label="Status"
@@ -624,13 +676,13 @@ export default function POWorkbench({ interviews = [] }) {
                 <textarea
                   value={decisionDraft.impact}
                   onChange={event => setDecisionDraft(prev => ({ ...prev, impact: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Impacto se não decidir"
                 />
                 <textarea
                   value={decisionDraft.evidence}
                   onChange={event => setDecisionDraft(prev => ({ ...prev, evidence: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Contexto/evidência"
                 />
               </div>
@@ -698,17 +750,14 @@ export default function POWorkbench({ interviews = [] }) {
                   </article>
                 ))
               ) : (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma decisão registrada ainda.</p>
+                <EmptyState>Nenhuma decisão registrada ainda.</EmptyState>
               )}
             </div>
-            </section>
+            </SectionPanel>
           )}
 
           {poTab === 'backlog' && (
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Backlog estruturado</p>
-            </div>
+            <SectionPanel title="Backlog estruturado">
             <div className="grid gap-3 p-4">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px_120px]">
                 <label className="grid gap-1">
@@ -716,7 +765,7 @@ export default function POWorkbench({ interviews = [] }) {
                   <input
                     value={draft.title}
                     onChange={event => setDraft(prev => ({ ...prev, title: event.target.value }))}
-                    className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    className={FIELD_CLASS}
                     placeholder="Ex: Automatizar validação de cadastro"
                   />
                 </label>
@@ -729,13 +778,13 @@ export default function POWorkbench({ interviews = [] }) {
                 <textarea
                   value={draft.evidence}
                   onChange={event => setDraft(prev => ({ ...prev, evidence: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Origem/evidência"
                 />
                 <textarea
                   value={draft.criteria}
                   onChange={event => setDraft(prev => ({ ...prev, criteria: event.target.value }))}
-                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  className={TEXTAREA_CLASS}
                   placeholder="Critérios de aceite"
                 />
               </div>
@@ -795,17 +844,14 @@ export default function POWorkbench({ interviews = [] }) {
                   </article>
                 ))
               ) : (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhum item estruturado ainda.</p>
+                <EmptyState>Nenhum item estruturado ainda.</EmptyState>
               )}
             </div>
-            </section>
+            </SectionPanel>
           )}
 
           {poTab === 'evidence' && (
-            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Evidências vinculadas</p>
-            </div>
+            <SectionPanel title="Evidências vinculadas">
             <div className="grid divide-y divide-gray-100">
               {evidence.length > 0 ? (
                 evidence.slice(0, 20).map((row, index) => (
@@ -824,10 +870,10 @@ export default function POWorkbench({ interviews = [] }) {
                   </div>
                 ))
               ) : (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma evidência estruturada encontrada.</p>
+                <EmptyState>Nenhuma evidência estruturada encontrada.</EmptyState>
               )}
             </div>
-            </section>
+            </SectionPanel>
           )}
         </div>
       </div>
