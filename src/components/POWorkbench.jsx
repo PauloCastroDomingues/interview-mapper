@@ -54,6 +54,15 @@ const EMPTY_DECISION_DRAFT = {
   evidence: '',
 }
 
+const PO_TABS = [
+  { id: 'overview', label: 'Visão geral' },
+  { id: 'analysis', label: 'Análise' },
+  { id: 'map', label: 'AS-IS / TO-BE' },
+  { id: 'decisions', label: 'Decisões' },
+  { id: 'backlog', label: 'Backlog' },
+  { id: 'evidence', label: 'Evidências' },
+]
+
 function slugPart(value = 'discovery') {
   return String(value || 'discovery')
     .normalize('NFD')
@@ -87,6 +96,7 @@ export default function POWorkbench({ interviews = [] }) {
   const [draft, setDraft] = useState(EMPTY_BACKLOG_DRAFT)
   const [flowDraft, setFlowDraft] = useState(EMPTY_FLOW_DRAFT)
   const [decisionDraft, setDecisionDraft] = useState(EMPTY_DECISION_DRAFT)
+  const [poTab, setPoTab] = useState('overview')
   const [notice, setNotice] = useState('')
 
   const active = groups.find(group => group.id === activeId) || groups[0]
@@ -311,7 +321,33 @@ export default function POWorkbench({ interviews = [] }) {
         </aside>
 
         <div className="space-y-4">
-          <section className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm shadow-gray-200/60 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+          <section className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm shadow-gray-200/60">
+            <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-6" role="tablist" aria-label="Áreas do workspace PO">
+              {PO_TABS.map(item => {
+                const activeTab = poTab === item.id
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    role="tab"
+                    aria-selected={activeTab}
+                    onClick={() => setPoTab(item.id)}
+                    className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                      activeTab
+                        ? 'bg-gray-950 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+
+          {poTab === 'overview' && (
+            <>
+              <section className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm shadow-gray-200/60 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
             <label className="grid gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Processo</span>
               <input
@@ -350,9 +386,9 @@ export default function POWorkbench({ interviews = [] }) {
                 className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
               />
             </label>
-          </section>
+              </section>
 
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             {[
               ['Entrevistas', active.stats.interviewCount],
               ['Progresso', `${active.stats.completion}%`],
@@ -366,20 +402,23 @@ export default function POWorkbench({ interviews = [] }) {
                 <p className="mt-1 text-xl font-semibold text-gray-950">{value}</p>
               </div>
             ))}
-          </section>
+              </section>
 
-          {maturity.missing.length > 0 && (
-            <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                Lacunas para ficar pronto para desenvolvimento
-              </p>
-              <p className="mt-1 text-sm leading-relaxed text-amber-900">
-                {maturity.missing.slice(0, 6).join(' · ')}
-              </p>
-            </section>
+              {maturity.missing.length > 0 && (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                    Lacunas para ficar pronto para desenvolvimento
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-amber-900">
+                    {maturity.missing.slice(0, 6).join(' · ')}
+                  </p>
+                </section>
+              )}
+            </>
           )}
 
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+          {poTab === 'analysis' && (
+            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Análise PO</p>
             </div>
@@ -398,9 +437,11 @@ export default function POWorkbench({ interviews = [] }) {
                 </div>
               ))}
             </div>
-          </section>
+            </section>
+          )}
 
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+          {poTab === 'map' && (
+            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Mapa AS-IS / TO-BE</p>
             </div>
@@ -544,9 +585,11 @@ export default function POWorkbench({ interviews = [] }) {
                 <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma etapa mapeada ainda.</p>
               )}
             </div>
-          </section>
+            </section>
+          )}
 
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+          {poTab === 'decisions' && (
+            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Decisões e pendências</p>
             </div>
@@ -658,9 +701,11 @@ export default function POWorkbench({ interviews = [] }) {
                 <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma decisão registrada ainda.</p>
               )}
             </div>
-          </section>
+            </section>
+          )}
 
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+          {poTab === 'backlog' && (
+            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Backlog estruturado</p>
             </div>
@@ -753,9 +798,11 @@ export default function POWorkbench({ interviews = [] }) {
                 <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhum item estruturado ainda.</p>
               )}
             </div>
-          </section>
+            </section>
+          )}
 
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+          {poTab === 'evidence' && (
+            <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Evidências vinculadas</p>
             </div>
@@ -780,7 +827,8 @@ export default function POWorkbench({ interviews = [] }) {
                 <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma evidência estruturada encontrada.</p>
               )}
             </div>
-          </section>
+            </section>
+          )}
         </div>
       </div>
     </div>
