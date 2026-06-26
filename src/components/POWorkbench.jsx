@@ -22,8 +22,21 @@ import {
   getBacklogScore,
   getDiscoveryEvidence,
 } from '@/lib/poUtils'
+import {
+  Badge,
+  Button,
+  Drawer,
+  EmptyState,
+  Field,
+  Metric,
+  Panel,
+  SelectField,
+  Table,
+  fieldClass,
+  textareaClass,
+} from './ui/primitives'
 
-const EMPTY_BACKLOG_DRAFT = {
+const EMPTY_BACKLOG = {
   title: '',
   type: 'História',
   priority: 'Média',
@@ -34,7 +47,7 @@ const EMPTY_BACKLOG_DRAFT = {
   criteria: '',
 }
 
-const EMPTY_FLOW_DRAFT = {
+const EMPTY_FLOW = {
   name: '',
   actor: '',
   system: '',
@@ -45,7 +58,7 @@ const EMPTY_FLOW_DRAFT = {
   tobe: '',
 }
 
-const EMPTY_DECISION_DRAFT = {
+const EMPTY_DECISION = {
   title: '',
   owner: '',
   dueDate: '',
@@ -63,9 +76,6 @@ const PO_TABS = [
   { id: 'evidence', label: 'Evidências' },
 ]
 
-const FIELD_CLASS = 'rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
-const TEXTAREA_CLASS = 'min-h-20 resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition-colors placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100'
-
 function slugPart(value = 'discovery') {
   return String(value || 'discovery')
     .normalize('NFD')
@@ -75,76 +85,46 @@ function slugPart(value = 'discovery') {
     .toLowerCase() || 'discovery'
 }
 
-function SectionPanel({ title, children, actions }) {
-  return (
-    <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <div className="flex flex-col gap-2 border-b border-gray-200 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">{title}</p>
-        {actions}
-      </div>
-      {children}
-    </section>
-  )
+function includesText(values, query) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return values.some(value => String(value || '').toLowerCase().includes(normalized))
 }
 
-function MetricCard({ label, value }) {
+function statusTone(value = '') {
+  if (['Pronto', 'Pronto para backlog', 'Decidida'].includes(value)) return 'green'
+  if (['Pendente', 'Em análise', 'Em validação', 'Validando', 'Refinar', 'Validar'].includes(value)) return 'amber'
+  if (['Bloqueada', 'Descartado'].includes(value)) return 'red'
+  return 'gray'
+}
+
+function getEmptyItem(type) {
+  if (type === 'flow') return EMPTY_FLOW
+  if (type === 'decision') return EMPTY_DECISION
+  return EMPTY_BACKLOG
+}
+
+function Toolbar({ children }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-gray-950">{value}</p>
+    <div className="flex flex-col gap-2 border-b border-gray-200 bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      {children}
     </div>
-  )
-}
-
-function EmptyState({ children }) {
-  return (
-    <p className="px-4 py-10 text-center text-sm text-gray-500">{children}</p>
-  )
-}
-
-function StatusBadge({ children, tone = 'gray' }) {
-  const tones = {
-    gray: 'border-gray-200 bg-gray-50 text-gray-600',
-    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-800',
-    red: 'border-red-100 bg-red-50 text-red-600',
-    dark: 'border-gray-900 bg-gray-950 text-white',
-  }
-
-  return (
-    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${tones[tone] || tones.gray}`}>
-      {children}
-    </span>
-  )
-}
-
-function FieldSelect({ label, value, options, onChange }) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className={FIELD_CLASS}
-      >
-        {options.map(option => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-    </label>
   )
 }
 
 export default function POWorkbench({ interviews = [] }) {
   const [workspace, setWorkspace] = useState(() => getPOWorkspace())
-  const groups = useMemo(() => buildDiscoveryGroups(interviews, workspace), [interviews, workspace])
   const [activeId, setActiveId] = useState('')
-  const [draft, setDraft] = useState(EMPTY_BACKLOG_DRAFT)
-  const [flowDraft, setFlowDraft] = useState(EMPTY_FLOW_DRAFT)
-  const [decisionDraft, setDecisionDraft] = useState(EMPTY_DECISION_DRAFT)
   const [poTab, setPoTab] = useState('overview')
   const [notice, setNotice] = useState('')
+  const [query, setQuery] = useState('')
+  const [backlogStatus, setBacklogStatus] = useState('Todos')
+  const [backlogPriority, setBacklogPriority] = useState('Todas')
+  const [decisionStatus, setDecisionStatus] = useState('Todos')
+  const [readMode, setReadMode] = useState(false)
+  const [drawer, setDrawer] = useState({ type: '', mode: '', item: null })
 
+  const groups = useMemo(() => buildDiscoveryGroups(interviews, workspace), [interviews, workspace])
   const active = groups.find(group => group.id === activeId) || groups[0]
   const discovery = active?.discovery
   const analysis = discovery?.analysis || {}
@@ -152,11 +132,31 @@ export default function POWorkbench({ interviews = [] }) {
   const flowSteps = useMemo(() => discovery?.flowSteps || [], [discovery?.flowSteps])
   const decisions = useMemo(() => discovery?.decisions || [], [discovery?.decisions])
   const evidence = useMemo(() => getDiscoveryEvidence(active?.interviews || []), [active])
+  const maturity = useMemo(() => calculateDiscoveryMaturity(active), [active])
+  const selectedId = active?.id || ''
+
   const orderedBacklog = useMemo(() => (
     [...backlog].sort((a, b) => getBacklogScore(b) - getBacklogScore(a))
   ), [backlog])
-  const maturity = useMemo(() => calculateDiscoveryMaturity(active), [active])
-  const selectedId = active?.id || ''
+
+  const filteredBacklog = orderedBacklog.filter(item => (
+    (backlogStatus === 'Todos' || item.status === backlogStatus)
+    && (backlogPriority === 'Todas' || item.priority === backlogPriority)
+    && includesText([item.title, item.type, item.status, item.evidence, item.criteria], query)
+  ))
+
+  const filteredDecisions = decisions.filter(item => (
+    (decisionStatus === 'Todos' || item.status === decisionStatus)
+    && includesText([item.title, item.owner, item.status, item.impact, item.evidence], query)
+  ))
+
+  const filteredFlow = flowSteps.filter(item => (
+    includesText([item.name, item.actor, item.system, item.input, item.action, item.output, item.problem, item.tobe], query)
+  ))
+
+  const filteredEvidence = evidence.filter(row => (
+    includesText([row.section, row.interviewTitle, row.question, row.answer], query)
+  ))
 
   function refreshWorkspace() {
     setWorkspace(getPOWorkspace())
@@ -177,112 +177,94 @@ export default function POWorkbench({ interviews = [] }) {
     })
   }
 
-  function addBacklogItem() {
-    if (!draft.title.trim()) {
-      setNotice('Digite um título para o item de backlog.')
-      return
+  function openDrawer(type, mode, item = null) {
+    setDrawer({
+      type,
+      mode,
+      item: item ? { ...item } : { ...getEmptyItem(type) },
+    })
+  }
+
+  function closeDrawer() {
+    setDrawer({ type: '', mode: '', item: null })
+  }
+
+  function updateDrawer(patch) {
+    setDrawer(prev => ({
+      ...prev,
+      item: {
+        ...(prev.item || {}),
+        ...patch,
+      },
+    }))
+  }
+
+  function saveDrawer() {
+    if (!drawer.item || !drawer.type) return
+
+    const now = new Date().toISOString()
+    if (drawer.type === 'flow') {
+      const item = {
+        ...drawer.item,
+        name: drawer.item.name?.trim() || '',
+        updatedAt: now,
+      }
+      if (!item.name) {
+        setNotice('Digite o nome da etapa do fluxo.')
+        return
+      }
+      patchDiscovery({
+        flowSteps: drawer.mode === 'create'
+          ? [...flowSteps, { ...item, id: makePOItemId('flow'), createdAt: now }]
+          : flowSteps.map(step => step.id === item.id ? item : step),
+      })
+      setNotice(drawer.mode === 'create' ? 'Etapa adicionada.' : 'Etapa atualizada.')
     }
 
-    const item = {
-      ...draft,
-      id: makePOItemId('backlog'),
-      title: draft.title.trim(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    if (drawer.type === 'decision') {
+      const item = {
+        ...drawer.item,
+        title: drawer.item.title?.trim() || '',
+        updatedAt: now,
+      }
+      if (!item.title) {
+        setNotice('Digite a decisão ou pendência.')
+        return
+      }
+      patchDiscovery({
+        decisions: drawer.mode === 'create'
+          ? [...decisions, { ...item, id: makePOItemId('decision'), createdAt: now }]
+          : decisions.map(decision => decision.id === item.id ? item : decision),
+      })
+      setNotice(drawer.mode === 'create' ? 'Decisão adicionada.' : 'Decisão atualizada.')
     }
 
-    patchDiscovery({ backlog: [...backlog, item] })
-    setDraft(EMPTY_BACKLOG_DRAFT)
-    setNotice('Item adicionado ao backlog.')
-  }
-
-  function updateBacklogItem(itemId, patch) {
-    patchDiscovery({
-      backlog: backlog.map(item => (
-        item.id === itemId
-          ? { ...item, ...patch, updatedAt: new Date().toISOString() }
-          : item
-      )),
-    })
-  }
-
-  function removeBacklogItem(itemId) {
-    patchDiscovery({ backlog: backlog.filter(item => item.id !== itemId) })
-    setNotice('Item removido do backlog.')
-  }
-
-  function addFlowStep() {
-    if (!flowDraft.name.trim()) {
-      setNotice('Digite o nome da etapa do fluxo.')
-      return
+    if (drawer.type === 'backlog') {
+      const item = {
+        ...drawer.item,
+        title: drawer.item.title?.trim() || '',
+        updatedAt: now,
+      }
+      if (!item.title) {
+        setNotice('Digite um título para o item de backlog.')
+        return
+      }
+      patchDiscovery({
+        backlog: drawer.mode === 'create'
+          ? [...backlog, { ...item, id: makePOItemId('backlog'), createdAt: now }]
+          : backlog.map(backlogItem => backlogItem.id === item.id ? item : backlogItem),
+      })
+      setNotice(drawer.mode === 'create' ? 'Item adicionado ao backlog.' : 'Item atualizado.')
     }
 
-    patchDiscovery({
-      flowSteps: [
-        ...flowSteps,
-        {
-          ...flowDraft,
-          id: makePOItemId('flow'),
-          name: flowDraft.name.trim(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    })
-    setFlowDraft(EMPTY_FLOW_DRAFT)
-    setNotice('Etapa adicionada ao mapa AS-IS/TO-BE.')
+    closeDrawer()
   }
 
-  function updateFlowStep(stepId, patch) {
-    patchDiscovery({
-      flowSteps: flowSteps.map(step => (
-        step.id === stepId
-          ? { ...step, ...patch, updatedAt: new Date().toISOString() }
-          : step
-      )),
-    })
-  }
-
-  function removeFlowStep(stepId) {
-    patchDiscovery({ flowSteps: flowSteps.filter(step => step.id !== stepId) })
-    setNotice('Etapa removida do mapa.')
-  }
-
-  function addDecision() {
-    if (!decisionDraft.title.trim()) {
-      setNotice('Digite a decisão ou pendência.')
-      return
-    }
-
-    patchDiscovery({
-      decisions: [
-        ...decisions,
-        {
-          ...decisionDraft,
-          id: makePOItemId('decision'),
-          title: decisionDraft.title.trim(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    })
-    setDecisionDraft(EMPTY_DECISION_DRAFT)
-    setNotice('Decisão adicionada.')
-  }
-
-  function updateDecision(decisionId, patch) {
-    patchDiscovery({
-      decisions: decisions.map(decision => (
-        decision.id === decisionId
-          ? { ...decision, ...patch, updatedAt: new Date().toISOString() }
-          : decision
-      )),
-    })
-  }
-
-  function removeDecision(decisionId) {
-    patchDiscovery({ decisions: decisions.filter(decision => decision.id !== decisionId) })
-    setNotice('Decisão removida.')
+  function removeItem(type, itemId) {
+    if (type === 'flow') patchDiscovery({ flowSteps: flowSteps.filter(item => item.id !== itemId) })
+    if (type === 'decision') patchDiscovery({ decisions: decisions.filter(item => item.id !== itemId) })
+    if (type === 'backlog') patchDiscovery({ backlog: backlog.filter(item => item.id !== itemId) })
+    setNotice('Item removido.')
   }
 
   function exportMarkdown() {
@@ -308,27 +290,21 @@ export default function POWorkbench({ interviews = [] }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] px-4 py-5 lg:px-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-[1480px] px-4 py-5 lg:px-6">
+      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">PO Workspace</p>
-          <h1 className="mt-1 text-xl font-semibold text-gray-950">{discovery.title}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold text-gray-950">{discovery.title}</h1>
+            <Badge tone={statusTone(discovery.status)}>{discovery.status || 'Coletando'}</Badge>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={exportMarkdown}
-            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
-          >
-            Exportar discovery
-          </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:text-sky-700"
-          >
-            Exportar backlog
-          </button>
+          <Button onClick={() => setReadMode(prev => !prev)} tone={readMode ? 'primary' : 'secondary'}>
+            {readMode ? 'Editar' : 'Modo leitura'}
+          </Button>
+          <Button onClick={exportMarkdown}>Exportar discovery</Button>
+          <Button onClick={exportCsv}>Exportar backlog</Button>
         </div>
       </div>
 
@@ -340,9 +316,8 @@ export default function POWorkbench({ interviews = [] }) {
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="space-y-3">
-          <section className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Processos</p>
-            <div className="space-y-1">
+          <Panel title="Processos">
+            <div className="space-y-1 p-2">
               {groups.map(group => (
                 <button
                   type="button"
@@ -363,12 +338,34 @@ export default function POWorkbench({ interviews = [] }) {
                 </button>
               ))}
             </div>
-          </section>
+          </Panel>
+
+          <Panel title="Filtros">
+            <div className="grid gap-3 p-3">
+              <Field label="Busca">
+                <input
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  className={fieldClass}
+                  placeholder="Buscar no workspace"
+                />
+              </Field>
+              {poTab === 'backlog' && (
+                <>
+                  <SelectField label="Status" value={backlogStatus} options={['Todos', ...BACKLOG_STATUSES]} onChange={setBacklogStatus} />
+                  <SelectField label="Prioridade" value={backlogPriority} options={['Todas', ...PRIORITIES]} onChange={setBacklogPriority} />
+                </>
+              )}
+              {poTab === 'decisions' && (
+                <SelectField label="Status" value={decisionStatus} options={['Todos', ...DECISION_STATUSES]} onChange={setDecisionStatus} />
+              )}
+            </div>
+          </Panel>
         </aside>
 
         <div className="space-y-4">
-          <section className="rounded-lg border border-gray-200 bg-white p-2">
-            <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-6" role="tablist" aria-label="Áreas do workspace PO">
+          <Panel>
+            <div className="grid gap-1 p-2 sm:grid-cols-3 xl:grid-cols-6" role="tablist" aria-label="Áreas do workspace PO">
               {PO_TABS.map(item => {
                 const activeTab = poTab === item.id
                 return (
@@ -389,76 +386,72 @@ export default function POWorkbench({ interviews = [] }) {
                 )
               })}
             </div>
-          </section>
+          </Panel>
 
           {poTab === 'overview' && (
             <>
-              <SectionPanel title="Contexto do discovery">
+              <Panel title="Contexto do discovery">
                 <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
-                  <label className="grid gap-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Processo</span>
+                  <Field label="Processo">
                     <input
                       value={discovery.title || ''}
                       onChange={event => patchDiscovery({ title: event.target.value })}
-                      className={FIELD_CLASS}
+                      disabled={readMode}
+                      className={fieldClass}
                     />
-                  </label>
-                  <FieldSelect
+                  </Field>
+                  <SelectField
                     label="Status"
                     value={discovery.status || 'Coletando'}
                     options={DISCOVERY_STATUSES}
                     onChange={value => patchDiscovery({ status: value })}
                   />
-                  <label className="grid gap-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">PO responsável</span>
+                  <Field label="PO responsável">
                     <input
                       value={discovery.owner || ''}
                       onChange={event => patchDiscovery({ owner: event.target.value })}
-                      className={FIELD_CLASS}
+                      disabled={readMode}
+                      className={fieldClass}
                     />
-                  </label>
-                  <label className="grid gap-1 lg:col-span-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Objetivo do discovery</span>
+                  </Field>
+                  <Field label="Objetivo do discovery">
                     <input
                       value={discovery.objective || ''}
                       onChange={event => patchDiscovery({ objective: event.target.value })}
-                      className={FIELD_CLASS}
+                      disabled={readMode}
+                      className={fieldClass}
                     />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sistemas</span>
+                  </Field>
+                  <Field label="Sistemas">
                     <input
                       value={discovery.systems || ''}
                       onChange={event => patchDiscovery({ systems: event.target.value })}
-                      className={FIELD_CLASS}
+                      disabled={readMode}
+                      className={fieldClass}
                     />
-                  </label>
+                  </Field>
                 </div>
-              </SectionPanel>
+              </Panel>
 
               <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                {[
-                  ['Entrevistas', active.stats.interviewCount],
-                  ['Progresso', `${active.stats.completion}%`],
-                  ['Respostas', `${active.stats.answeredQuestions}/${active.stats.totalQuestions || 0}`],
-                  ['Evidências', active.stats.images],
-                  ['Backlog', backlog.length],
-                  ['Maturidade', `${maturity.score}%`],
-                ].map(([label, value]) => (
-                  <MetricCard key={label} label={label} value={value} />
-                ))}
+                <Metric label="Entrevistas" value={active.stats.interviewCount} />
+                <Metric label="Progresso" value={`${active.stats.completion}%`} />
+                <Metric label="Respostas" value={`${active.stats.answeredQuestions}/${active.stats.totalQuestions || 0}`} />
+                <Metric label="Evidências" value={active.stats.images} />
+                <Metric label="Backlog" value={backlog.length} />
+                <Metric label="Maturidade" value={`${maturity.score}%`} />
               </section>
 
-              <SectionPanel title="Prontidão para desenvolvimento">
+              <Panel title="Prontidão para desenvolvimento">
                 <div className="p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-gray-950">{maturity.score}% de maturidade</p>
                       <p className="mt-0.5 text-xs text-gray-500">{maturity.completed}/{maturity.total} critérios completos</p>
                     </div>
-                    <StatusBadge tone={maturity.score >= 80 ? 'green' : maturity.score >= 55 ? 'amber' : 'gray'}>
+                    <Badge tone={maturity.score >= 80 ? 'green' : maturity.score >= 55 ? 'amber' : 'gray'}>
                       {maturity.score >= 80 ? 'Próximo de dev' : maturity.score >= 55 ? 'Em refinamento' : 'Em descoberta'}
-                    </StatusBadge>
+                    </Badge>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
                     <div
@@ -469,17 +462,17 @@ export default function POWorkbench({ interviews = [] }) {
                   {maturity.missing.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {maturity.missing.slice(0, 8).map(item => (
-                        <StatusBadge key={item} tone="amber">{item}</StatusBadge>
+                        <Badge key={item} tone="amber">{item}</Badge>
                       ))}
                     </div>
                   )}
                 </div>
-              </SectionPanel>
+              </Panel>
             </>
           )}
 
           {poTab === 'analysis' && (
-            <SectionPanel title="Análise PO">
+            <Panel title="Análise PO">
               <div className="grid gap-0">
                 {ANALYSIS_FIELDS.map(([label, field]) => (
                   <div key={field} className="grid border-b border-gray-100 last:border-b-0 lg:grid-cols-[220px_1fr]">
@@ -489,394 +482,198 @@ export default function POWorkbench({ interviews = [] }) {
                     <textarea
                       value={analysis[field] || ''}
                       onChange={event => patchAnalysis(field, event.target.value)}
-                      className="min-h-28 resize-y bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:bg-sky-50/30"
+                      disabled={readMode}
+                      className="min-h-28 resize-y bg-white px-3 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:bg-sky-50/30 disabled:bg-gray-50"
                       placeholder={`Registre ${label.toLowerCase()}.`}
                     />
                   </div>
                 ))}
               </div>
-            </SectionPanel>
+            </Panel>
           )}
 
           {poTab === 'map' && (
-            <SectionPanel title="Mapa AS-IS / TO-BE">
-            <div className="grid gap-3 p-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_140px]">
-                <input
-                  value={flowDraft.name}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, name: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Etapa"
-                />
-                <input
-                  value={flowDraft.actor}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, actor: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Ator"
-                />
-                <input
-                  value={flowDraft.system}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, system: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Sistema"
-                />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <textarea
-                  value={flowDraft.action}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, action: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Ação AS-IS"
-                />
-                <textarea
-                  value={flowDraft.tobe}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, tobe: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Proposta TO-BE"
-                />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-3">
-                <input
-                  value={flowDraft.input}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, input: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Entrada"
-                />
-                <input
-                  value={flowDraft.output}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, output: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Saída"
-                />
-                <input
-                  value={flowDraft.problem}
-                  onChange={event => setFlowDraft(prev => ({ ...prev, problem: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Problema"
-                />
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={addFlowStep}
-                  className="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-                >
-                  Adicionar etapa
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100">
-              {flowSteps.length > 0 ? (
-                flowSteps.map((step, index) => (
-                  <article key={step.id} className="grid gap-3 border-b border-gray-100 p-4 last:border-b-0">
-                    <div className="grid gap-3 lg:grid-cols-[56px_minmax(0,1fr)_140px_140px_88px]">
-                      <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-center text-xs font-semibold text-gray-600">
-                        {index + 1}
-                      </span>
-                      <input
-                        value={step.name || ''}
-                        onChange={event => updateFlowStep(step.id, { name: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Etapa"
-                      />
-                      <input
-                        value={step.actor || ''}
-                        onChange={event => updateFlowStep(step.id, { actor: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Ator"
-                      />
-                      <input
-                        value={step.system || ''}
-                        onChange={event => updateFlowStep(step.id, { system: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Sistema"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFlowStep(step.id)}
-                        className="rounded-md border border-red-100 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <textarea
-                        value={step.action || ''}
-                        onChange={event => updateFlowStep(step.id, { action: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Ação AS-IS"
-                      />
-                      <textarea
-                        value={step.tobe || ''}
-                        onChange={event => updateFlowStep(step.id, { tobe: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="TO-BE"
-                      />
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-3">
-                      <input
-                        value={step.input || ''}
-                        onChange={event => updateFlowStep(step.id, { input: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Entrada"
-                      />
-                      <input
-                        value={step.output || ''}
-                        onChange={event => updateFlowStep(step.id, { output: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Saída"
-                      />
-                      <input
-                        value={step.problem || ''}
-                        onChange={event => updateFlowStep(step.id, { problem: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Problema"
-                      />
-                    </div>
-                  </article>
-                ))
+            <Panel
+              title="Mapa AS-IS / TO-BE"
+              actions={!readMode && <Button tone="primary" onClick={() => openDrawer('flow', 'create')}>Nova etapa</Button>}
+            >
+              {filteredFlow.length > 0 ? (
+                <Table columns={['Etapa', 'Ator', 'Sistema', 'Problema', 'TO-BE', '']}>
+                  {filteredFlow.map(step => (
+                    <tr key={step.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-semibold text-gray-900">
+                        <button type="button" onClick={() => openDrawer('flow', 'edit', step)} className="text-left hover:text-sky-700">
+                          {step.name || 'Etapa sem nome'}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{step.actor || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{step.system || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{step.problem || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{step.tobe || '-'}</td>
+                      <td className="px-3 py-2 text-right">
+                        {!readMode && <Button tone="ghost" onClick={() => removeItem('flow', step.id)}>Excluir</Button>}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
               ) : (
-                <EmptyState>Nenhuma etapa mapeada ainda.</EmptyState>
+                <EmptyState
+                  title="Nenhuma etapa mapeada"
+                  description="Estruture o fluxo atual e a proposta futura por etapa."
+                  action={!readMode && <Button tone="primary" onClick={() => openDrawer('flow', 'create')}>Adicionar etapa</Button>}
+                />
               )}
-            </div>
-            </SectionPanel>
+            </Panel>
           )}
 
           {poTab === 'decisions' && (
-            <SectionPanel title="Decisões e pendências">
-            <div className="grid gap-3 p-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_140px_150px]">
-                <input
-                  value={decisionDraft.title}
-                  onChange={event => setDecisionDraft(prev => ({ ...prev, title: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Decisão ou pendência"
-                />
-                <input
-                  value={decisionDraft.owner}
-                  onChange={event => setDecisionDraft(prev => ({ ...prev, owner: event.target.value }))}
-                  className={FIELD_CLASS}
-                  placeholder="Dono"
-                />
-                <input
-                  type="date"
-                  value={decisionDraft.dueDate}
-                  onChange={event => setDecisionDraft(prev => ({ ...prev, dueDate: event.target.value }))}
-                  className={FIELD_CLASS}
-                />
-                <FieldSelect
-                  label="Status"
-                  value={decisionDraft.status}
-                  options={DECISION_STATUSES}
-                  onChange={value => setDecisionDraft(prev => ({ ...prev, status: value }))}
-                />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <textarea
-                  value={decisionDraft.impact}
-                  onChange={event => setDecisionDraft(prev => ({ ...prev, impact: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Impacto se não decidir"
-                />
-                <textarea
-                  value={decisionDraft.evidence}
-                  onChange={event => setDecisionDraft(prev => ({ ...prev, evidence: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Contexto/evidência"
-                />
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={addDecision}
-                  className="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-                >
-                  Adicionar decisão
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100">
-              {decisions.length > 0 ? (
-                decisions.map(decision => (
-                  <article key={decision.id} className="grid gap-3 border-b border-gray-100 p-4 last:border-b-0">
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_130px_150px_88px]">
-                      <input
-                        value={decision.title || ''}
-                        onChange={event => updateDecision(decision.id, { title: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
-                      <input
-                        value={decision.owner || ''}
-                        onChange={event => updateDecision(decision.id, { owner: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Dono"
-                      />
-                      <input
-                        type="date"
-                        value={decision.dueDate || ''}
-                        onChange={event => updateDecision(decision.id, { dueDate: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
-                      <FieldSelect
-                        label="Status"
-                        value={decision.status || 'Pendente'}
-                        options={DECISION_STATUSES}
-                        onChange={value => updateDecision(decision.id, { status: value })}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeDecision(decision.id)}
-                        className="rounded-md border border-red-100 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <textarea
-                        value={decision.impact || ''}
-                        onChange={event => updateDecision(decision.id, { impact: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Impacto"
-                      />
-                      <textarea
-                        value={decision.evidence || ''}
-                        onChange={event => updateDecision(decision.id, { evidence: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Evidência"
-                      />
-                    </div>
-                  </article>
-                ))
+            <Panel
+              title="Decisões e pendências"
+              actions={!readMode && <Button tone="primary" onClick={() => openDrawer('decision', 'create')}>Nova decisão</Button>}
+            >
+              {filteredDecisions.length > 0 ? (
+                <Table columns={['Decisão', 'Dono', 'Prazo', 'Status', 'Impacto', '']}>
+                  {filteredDecisions.map(decision => (
+                    <tr key={decision.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-semibold text-gray-900">
+                        <button type="button" onClick={() => openDrawer('decision', 'edit', decision)} className="text-left hover:text-sky-700">
+                          {decision.title || 'Decisão sem título'}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{decision.owner || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{decision.dueDate || '-'}</td>
+                      <td className="px-3 py-2"><Badge tone={statusTone(decision.status)}>{decision.status || 'Pendente'}</Badge></td>
+                      <td className="px-3 py-2 text-gray-600">{decision.impact || '-'}</td>
+                      <td className="px-3 py-2 text-right">
+                        {!readMode && <Button tone="ghost" onClick={() => removeItem('decision', decision.id)}>Excluir</Button>}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
               ) : (
-                <EmptyState>Nenhuma decisão registrada ainda.</EmptyState>
+                <EmptyState
+                  title="Nenhuma decisão registrada"
+                  description="Use decisões para controlar pendências que bloqueiam refinamento ou desenvolvimento."
+                  action={!readMode && <Button tone="primary" onClick={() => openDrawer('decision', 'create')}>Adicionar decisão</Button>}
+                />
               )}
-            </div>
-            </SectionPanel>
+            </Panel>
           )}
 
           {poTab === 'backlog' && (
-            <SectionPanel title="Backlog estruturado">
-            <div className="grid gap-3 p-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px_120px]">
-                <label className="grid gap-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Título</span>
-                  <input
-                    value={draft.title}
-                    onChange={event => setDraft(prev => ({ ...prev, title: event.target.value }))}
-                    className={FIELD_CLASS}
-                    placeholder="Ex: Automatizar validação de cadastro"
-                  />
-                </label>
-                <FieldSelect label="Tipo" value={draft.type} options={BACKLOG_TYPES} onChange={value => setDraft(prev => ({ ...prev, type: value }))} />
-                <FieldSelect label="Prioridade" value={draft.priority} options={PRIORITIES} onChange={value => setDraft(prev => ({ ...prev, priority: value }))} />
-                <FieldSelect label="Impacto" value={draft.impact} options={IMPACT_LEVELS} onChange={value => setDraft(prev => ({ ...prev, impact: value }))} />
-                <FieldSelect label="Esforço" value={draft.effort} options={EFFORT_LEVELS} onChange={value => setDraft(prev => ({ ...prev, effort: value }))} />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <textarea
-                  value={draft.evidence}
-                  onChange={event => setDraft(prev => ({ ...prev, evidence: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Origem/evidência"
-                />
-                <textarea
-                  value={draft.criteria}
-                  onChange={event => setDraft(prev => ({ ...prev, criteria: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                  placeholder="Critérios de aceite"
-                />
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={addBacklogItem}
-                  className="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-                >
-                  Adicionar item
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100">
-              {orderedBacklog.length > 0 ? (
-                orderedBacklog.map(item => (
-                  <article key={item.id} className="grid gap-3 border-b border-gray-100 p-4 last:border-b-0">
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_120px_120px_120px_120px_120px]">
-                      <input
-                        value={item.title || ''}
-                        onChange={event => updateBacklogItem(item.id, { title: event.target.value })}
-                        className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
-                      <FieldSelect label="Tipo" value={item.type || 'História'} options={BACKLOG_TYPES} onChange={value => updateBacklogItem(item.id, { type: value })} />
-                      <FieldSelect label="Prioridade" value={item.priority || 'Média'} options={PRIORITIES} onChange={value => updateBacklogItem(item.id, { priority: value })} />
-                      <FieldSelect label="Impacto" value={item.impact || 'Médio'} options={IMPACT_LEVELS} onChange={value => updateBacklogItem(item.id, { impact: value })} />
-                      <FieldSelect label="Esforço" value={item.effort || 'Médio'} options={EFFORT_LEVELS} onChange={value => updateBacklogItem(item.id, { effort: value })} />
-                      <FieldSelect label="Status" value={item.status || 'Ideia'} options={BACKLOG_STATUSES} onChange={value => updateBacklogItem(item.id, { status: value })} />
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-[1fr_1fr_88px]">
-                      <textarea
-                        value={item.evidence || ''}
-                        onChange={event => updateBacklogItem(item.id, { evidence: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Evidência"
-                      />
-                      <textarea
-                        value={item.criteria || ''}
-                        onChange={event => updateBacklogItem(item.id, { criteria: event.target.value })}
-                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        placeholder="Critérios"
-                      />
-                      <div className="flex flex-col gap-2">
-                        <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-center text-xs font-semibold text-gray-600">
-                          Score {getBacklogScore(item)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeBacklogItem(item.id)}
-                          className="rounded-md border border-red-100 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                        >
-                          Excluir
+            <Panel
+              title="Backlog estruturado"
+              actions={!readMode && <Button tone="primary" onClick={() => openDrawer('backlog', 'create')}>Novo item</Button>}
+            >
+              {filteredBacklog.length > 0 ? (
+                <Table columns={['Item', 'Tipo', 'Prioridade', 'Impacto', 'Esforço', 'Score', 'Status', '']}>
+                  {filteredBacklog.map(item => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-semibold text-gray-900">
+                        <button type="button" onClick={() => openDrawer('backlog', 'edit', item)} className="text-left hover:text-sky-700">
+                          {item.title || 'Item sem título'}
                         </button>
-                      </div>
-                    </div>
-                  </article>
-                ))
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{item.type || '-'}</td>
+                      <td className="px-3 py-2"><Badge tone={item.priority === 'Alta' ? 'red' : item.priority === 'Média' ? 'amber' : 'gray'}>{item.priority || '-'}</Badge></td>
+                      <td className="px-3 py-2 text-gray-600">{item.impact || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{item.effort || '-'}</td>
+                      <td className="px-3 py-2 text-gray-900">{getBacklogScore(item)}</td>
+                      <td className="px-3 py-2"><Badge tone={statusTone(item.status)}>{item.status || 'Ideia'}</Badge></td>
+                      <td className="px-3 py-2 text-right">
+                        {!readMode && <Button tone="ghost" onClick={() => removeItem('backlog', item.id)}>Excluir</Button>}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
               ) : (
-                <EmptyState>Nenhum item estruturado ainda.</EmptyState>
+                <EmptyState
+                  title="Nenhum item no backlog"
+                  description="Transforme dores e oportunidades em itens priorizados."
+                  action={!readMode && <Button tone="primary" onClick={() => openDrawer('backlog', 'create')}>Adicionar item</Button>}
+                />
               )}
-            </div>
-            </SectionPanel>
+            </Panel>
           )}
 
           {poTab === 'evidence' && (
-            <SectionPanel title="Evidências vinculadas">
-            <div className="grid divide-y divide-gray-100">
-              {evidence.length > 0 ? (
-                evidence.slice(0, 20).map((row, index) => (
-                  <div key={`${row.interviewId}-${row.sectionId}-${index}`} className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
-                        {row.section}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-900">{row.interviewTitle}</span>
-                      {row.imageCount > 0 && (
-                        <span className="text-[11px] text-gray-500">{row.imageCount} print{row.imageCount !== 1 ? 's' : ''}</span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm font-medium text-gray-800">{row.question}</p>
-                    {row.answer && <p className="mt-1 line-clamp-2 text-sm text-gray-500">{row.answer}</p>}
-                  </div>
-                ))
+            <Panel title="Evidências vinculadas">
+              {filteredEvidence.length > 0 ? (
+                <Table columns={['Seção', 'Entrevista', 'Pergunta', 'Resposta', 'Prints']}>
+                  {filteredEvidence.slice(0, 50).map((row, index) => (
+                    <tr key={`${row.interviewId}-${row.sectionId}-${index}`} className="hover:bg-gray-50">
+                      <td className="px-3 py-2"><Badge>{row.section}</Badge></td>
+                      <td className="px-3 py-2 font-semibold text-gray-900">{row.interviewTitle}</td>
+                      <td className="max-w-xs px-3 py-2 text-gray-600">{row.question}</td>
+                      <td className="max-w-sm px-3 py-2 text-gray-500">{row.answer || '-'}</td>
+                      <td className="px-3 py-2 text-gray-600">{row.imageCount || '-'}</td>
+                    </tr>
+                  ))}
+                </Table>
               ) : (
-                <EmptyState>Nenhuma evidência estruturada encontrada.</EmptyState>
+                <EmptyState title="Nenhuma evidência encontrada" description="As respostas das entrevistas aparecerão aqui para rastreabilidade." />
               )}
-            </div>
-            </SectionPanel>
+            </Panel>
           )}
         </div>
       </div>
+
+      <Drawer
+        open={Boolean(drawer.type)}
+        title={drawer.mode === 'create' ? 'Novo item' : 'Editar item'}
+        onClose={closeDrawer}
+        footer={!readMode && (
+          <div className="flex justify-end gap-2">
+            <Button tone="ghost" onClick={closeDrawer}>Cancelar</Button>
+            <Button tone="primary" onClick={saveDrawer}>Salvar</Button>
+          </div>
+        )}
+      >
+        {drawer.type === 'flow' && (
+          <div className="grid gap-3">
+            <Field label="Etapa"><input value={drawer.item?.name || ''} onChange={event => updateDrawer({ name: event.target.value })} className={fieldClass} /></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Ator"><input value={drawer.item?.actor || ''} onChange={event => updateDrawer({ actor: event.target.value })} className={fieldClass} /></Field>
+              <Field label="Sistema"><input value={drawer.item?.system || ''} onChange={event => updateDrawer({ system: event.target.value })} className={fieldClass} /></Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Entrada"><input value={drawer.item?.input || ''} onChange={event => updateDrawer({ input: event.target.value })} className={fieldClass} /></Field>
+              <Field label="Saída"><input value={drawer.item?.output || ''} onChange={event => updateDrawer({ output: event.target.value })} className={fieldClass} /></Field>
+            </div>
+            <Field label="Ação AS-IS"><textarea value={drawer.item?.action || ''} onChange={event => updateDrawer({ action: event.target.value })} className={textareaClass} /></Field>
+            <Field label="Problema"><textarea value={drawer.item?.problem || ''} onChange={event => updateDrawer({ problem: event.target.value })} className={textareaClass} /></Field>
+            <Field label="Proposta TO-BE"><textarea value={drawer.item?.tobe || ''} onChange={event => updateDrawer({ tobe: event.target.value })} className={textareaClass} /></Field>
+          </div>
+        )}
+
+        {drawer.type === 'decision' && (
+          <div className="grid gap-3">
+            <Field label="Decisão ou pendência"><input value={drawer.item?.title || ''} onChange={event => updateDrawer({ title: event.target.value })} className={fieldClass} /></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Dono"><input value={drawer.item?.owner || ''} onChange={event => updateDrawer({ owner: event.target.value })} className={fieldClass} /></Field>
+              <Field label="Prazo"><input type="date" value={drawer.item?.dueDate || ''} onChange={event => updateDrawer({ dueDate: event.target.value })} className={fieldClass} /></Field>
+            </div>
+            <SelectField label="Status" value={drawer.item?.status || 'Pendente'} options={DECISION_STATUSES} onChange={value => updateDrawer({ status: value })} />
+            <Field label="Impacto se não decidir"><textarea value={drawer.item?.impact || ''} onChange={event => updateDrawer({ impact: event.target.value })} className={textareaClass} /></Field>
+            <Field label="Contexto/evidência"><textarea value={drawer.item?.evidence || ''} onChange={event => updateDrawer({ evidence: event.target.value })} className={textareaClass} /></Field>
+          </div>
+        )}
+
+        {drawer.type === 'backlog' && (
+          <div className="grid gap-3">
+            <Field label="Título"><input value={drawer.item?.title || ''} onChange={event => updateDrawer({ title: event.target.value })} className={fieldClass} /></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SelectField label="Tipo" value={drawer.item?.type || 'História'} options={BACKLOG_TYPES} onChange={value => updateDrawer({ type: value })} />
+              <SelectField label="Status" value={drawer.item?.status || 'Ideia'} options={BACKLOG_STATUSES} onChange={value => updateDrawer({ status: value })} />
+              <SelectField label="Prioridade" value={drawer.item?.priority || 'Média'} options={PRIORITIES} onChange={value => updateDrawer({ priority: value })} />
+              <SelectField label="Impacto" value={drawer.item?.impact || 'Médio'} options={IMPACT_LEVELS} onChange={value => updateDrawer({ impact: value })} />
+              <SelectField label="Esforço" value={drawer.item?.effort || 'Médio'} options={EFFORT_LEVELS} onChange={value => updateDrawer({ effort: value })} />
+            </div>
+            <Field label="Evidência"><textarea value={drawer.item?.evidence || ''} onChange={event => updateDrawer({ evidence: event.target.value })} className={textareaClass} /></Field>
+            <Field label="Critérios de aceite"><textarea value={drawer.item?.criteria || ''} onChange={event => updateDrawer({ criteria: event.target.value })} className={textareaClass} /></Field>
+          </div>
+        )}
+      </Drawer>
     </div>
   )
 }

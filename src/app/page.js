@@ -157,7 +157,7 @@ export default function Home() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="truncate text-sm font-semibold text-gray-950">Interview Mapper</p>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.6.0</span>
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.7.0</span>
               </div>
               <p className="mt-0.5 text-xs text-gray-500">PO workbench pessoal</p>
             </div>
@@ -237,7 +237,7 @@ export default function Home() {
                   <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-950 text-xs font-bold text-white">
                     IM
                   </span>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.6.0</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.7.0</span>
                 </div>
                 <h1 className="mt-2 truncate text-lg font-semibold text-gray-950 lg:mt-0">{pageTitle}</h1>
                 <p className="mt-0.5 text-sm text-gray-500">{pageSubtitle}</p>

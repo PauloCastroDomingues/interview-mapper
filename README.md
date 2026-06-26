@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.6.0`
+**Versão atual:** `v1.7.0`
 
-Esta versão transforma o app em um workspace mais executivo para Product Owners: app shell com navegação lateral, biblioteca de perguntas, modo guiado ou manual do zero, aba PO em sub-abas, score de maturidade, mapa AS-IS/TO-BE, decisões pendentes, backlog estruturado, exportação Markdown/CSV, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais executivo para Product Owners: app shell com navegação lateral, biblioteca de perguntas, modo guiado ou manual do zero, aba PO em sub-abas, tabelas compactas, drawer lateral de edição, busca/filtros, modo leitura, score de maturidade, mapa AS-IS/TO-BE, decisões pendentes, backlog estruturado, exportação Markdown/CSV, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -23,6 +23,8 @@ Esta versão transforma o app em um workspace mais executivo para Product Owners
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Aba PO** — consolida entrevistas por processo, registra análise PO e estrutura backlog priorizado
 - **Sub-abas PO** — visão geral, análise, AS-IS/TO-BE, decisões, backlog e evidências
+- **Tabelas compactas e drawer lateral** — edite backlog, decisões e etapas sem poluir a tela principal
+- **Busca, filtros e modo leitura** — trabalhe com visão operacional ou apresentação limpa
 - **Maturidade do discovery** — mostra lacunas antes de enviar a demanda para desenvolvimento
 - **Mapa AS-IS / TO-BE** — organiza etapa, ator, sistema, entrada, saída, problema e proposta
 - **Decisões e pendências** — registra dono, prazo, status, impacto e evidência
