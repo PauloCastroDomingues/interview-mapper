@@ -10,6 +10,7 @@ import {
   ANALYSIS_FIELDS,
   BACKLOG_STATUSES,
   BACKLOG_TYPES,
+  DECISION_STATUSES,
   DISCOVERY_STATUSES,
   EFFORT_LEVELS,
   IMPACT_LEVELS,
@@ -17,6 +18,7 @@ import {
   buildBacklogCsv,
   buildDiscoveryGroups,
   buildDiscoveryMarkdown,
+  calculateDiscoveryMaturity,
   getBacklogScore,
   getDiscoveryEvidence,
 } from '@/lib/poUtils'
@@ -30,6 +32,26 @@ const EMPTY_BACKLOG_DRAFT = {
   status: 'Ideia',
   evidence: '',
   criteria: '',
+}
+
+const EMPTY_FLOW_DRAFT = {
+  name: '',
+  actor: '',
+  system: '',
+  input: '',
+  action: '',
+  output: '',
+  problem: '',
+  tobe: '',
+}
+
+const EMPTY_DECISION_DRAFT = {
+  title: '',
+  owner: '',
+  dueDate: '',
+  status: 'Pendente',
+  impact: '',
+  evidence: '',
 }
 
 function slugPart(value = 'discovery') {
@@ -63,16 +85,21 @@ export default function POWorkbench({ interviews = [] }) {
   const groups = useMemo(() => buildDiscoveryGroups(interviews, workspace), [interviews, workspace])
   const [activeId, setActiveId] = useState('')
   const [draft, setDraft] = useState(EMPTY_BACKLOG_DRAFT)
+  const [flowDraft, setFlowDraft] = useState(EMPTY_FLOW_DRAFT)
+  const [decisionDraft, setDecisionDraft] = useState(EMPTY_DECISION_DRAFT)
   const [notice, setNotice] = useState('')
 
   const active = groups.find(group => group.id === activeId) || groups[0]
   const discovery = active?.discovery
   const analysis = discovery?.analysis || {}
   const backlog = useMemo(() => discovery?.backlog || [], [discovery?.backlog])
+  const flowSteps = useMemo(() => discovery?.flowSteps || [], [discovery?.flowSteps])
+  const decisions = useMemo(() => discovery?.decisions || [], [discovery?.decisions])
   const evidence = useMemo(() => getDiscoveryEvidence(active?.interviews || []), [active])
   const orderedBacklog = useMemo(() => (
     [...backlog].sort((a, b) => getBacklogScore(b) - getBacklogScore(a))
   ), [backlog])
+  const maturity = useMemo(() => calculateDiscoveryMaturity(active), [active])
   const selectedId = active?.id || ''
 
   function refreshWorkspace() {
@@ -126,6 +153,80 @@ export default function POWorkbench({ interviews = [] }) {
   function removeBacklogItem(itemId) {
     patchDiscovery({ backlog: backlog.filter(item => item.id !== itemId) })
     setNotice('Item removido do backlog.')
+  }
+
+  function addFlowStep() {
+    if (!flowDraft.name.trim()) {
+      setNotice('Digite o nome da etapa do fluxo.')
+      return
+    }
+
+    patchDiscovery({
+      flowSteps: [
+        ...flowSteps,
+        {
+          ...flowDraft,
+          id: makePOItemId('flow'),
+          name: flowDraft.name.trim(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    })
+    setFlowDraft(EMPTY_FLOW_DRAFT)
+    setNotice('Etapa adicionada ao mapa AS-IS/TO-BE.')
+  }
+
+  function updateFlowStep(stepId, patch) {
+    patchDiscovery({
+      flowSteps: flowSteps.map(step => (
+        step.id === stepId
+          ? { ...step, ...patch, updatedAt: new Date().toISOString() }
+          : step
+      )),
+    })
+  }
+
+  function removeFlowStep(stepId) {
+    patchDiscovery({ flowSteps: flowSteps.filter(step => step.id !== stepId) })
+    setNotice('Etapa removida do mapa.')
+  }
+
+  function addDecision() {
+    if (!decisionDraft.title.trim()) {
+      setNotice('Digite a decisão ou pendência.')
+      return
+    }
+
+    patchDiscovery({
+      decisions: [
+        ...decisions,
+        {
+          ...decisionDraft,
+          id: makePOItemId('decision'),
+          title: decisionDraft.title.trim(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    })
+    setDecisionDraft(EMPTY_DECISION_DRAFT)
+    setNotice('Decisão adicionada.')
+  }
+
+  function updateDecision(decisionId, patch) {
+    patchDiscovery({
+      decisions: decisions.map(decision => (
+        decision.id === decisionId
+          ? { ...decision, ...patch, updatedAt: new Date().toISOString() }
+          : decision
+      )),
+    })
+  }
+
+  function removeDecision(decisionId) {
+    patchDiscovery({ decisions: decisions.filter(decision => decision.id !== decisionId) })
+    setNotice('Decisão removida.')
   }
 
   function exportMarkdown() {
@@ -251,13 +352,14 @@ export default function POWorkbench({ interviews = [] }) {
             </label>
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             {[
               ['Entrevistas', active.stats.interviewCount],
               ['Progresso', `${active.stats.completion}%`],
               ['Respostas', `${active.stats.answeredQuestions}/${active.stats.totalQuestions || 0}`],
               ['Evidências', active.stats.images],
               ['Backlog', backlog.length],
+              ['Maturidade', `${maturity.score}%`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm shadow-gray-200/60">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
@@ -265,6 +367,17 @@ export default function POWorkbench({ interviews = [] }) {
               </div>
             ))}
           </section>
+
+          {maturity.missing.length > 0 && (
+            <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                Lacunas para ficar pronto para desenvolvimento
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-amber-900">
+                {maturity.missing.slice(0, 6).join(' · ')}
+              </p>
+            </section>
+          )}
 
           <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
             <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -284,6 +397,266 @@ export default function POWorkbench({ interviews = [] }) {
                   />
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Mapa AS-IS / TO-BE</p>
+            </div>
+            <div className="grid gap-3 p-4">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_140px]">
+                <input
+                  value={flowDraft.name}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, name: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Etapa"
+                />
+                <input
+                  value={flowDraft.actor}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, actor: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Ator"
+                />
+                <input
+                  value={flowDraft.system}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, system: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Sistema"
+                />
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <textarea
+                  value={flowDraft.action}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, action: event.target.value }))}
+                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Ação AS-IS"
+                />
+                <textarea
+                  value={flowDraft.tobe}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, tobe: event.target.value }))}
+                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Proposta TO-BE"
+                />
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <input
+                  value={flowDraft.input}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, input: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Entrada"
+                />
+                <input
+                  value={flowDraft.output}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, output: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Saída"
+                />
+                <input
+                  value={flowDraft.problem}
+                  onChange={event => setFlowDraft(prev => ({ ...prev, problem: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Problema"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={addFlowStep}
+                  className="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+                >
+                  Adicionar etapa
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100">
+              {flowSteps.length > 0 ? (
+                flowSteps.map((step, index) => (
+                  <article key={step.id} className="grid gap-3 border-b border-gray-100 p-4 last:border-b-0">
+                    <div className="grid gap-3 lg:grid-cols-[56px_minmax(0,1fr)_140px_140px_88px]">
+                      <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-center text-xs font-semibold text-gray-600">
+                        {index + 1}
+                      </span>
+                      <input
+                        value={step.name || ''}
+                        onChange={event => updateFlowStep(step.id, { name: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Etapa"
+                      />
+                      <input
+                        value={step.actor || ''}
+                        onChange={event => updateFlowStep(step.id, { actor: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Ator"
+                      />
+                      <input
+                        value={step.system || ''}
+                        onChange={event => updateFlowStep(step.id, { system: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Sistema"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFlowStep(step.id)}
+                        className="rounded-md border border-red-100 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <textarea
+                        value={step.action || ''}
+                        onChange={event => updateFlowStep(step.id, { action: event.target.value })}
+                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Ação AS-IS"
+                      />
+                      <textarea
+                        value={step.tobe || ''}
+                        onChange={event => updateFlowStep(step.id, { tobe: event.target.value })}
+                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="TO-BE"
+                      />
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      <input
+                        value={step.input || ''}
+                        onChange={event => updateFlowStep(step.id, { input: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Entrada"
+                      />
+                      <input
+                        value={step.output || ''}
+                        onChange={event => updateFlowStep(step.id, { output: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Saída"
+                      />
+                      <input
+                        value={step.problem || ''}
+                        onChange={event => updateFlowStep(step.id, { problem: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Problema"
+                      />
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma etapa mapeada ainda.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-200/60">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Decisões e pendências</p>
+            </div>
+            <div className="grid gap-3 p-4">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_140px_150px]">
+                <input
+                  value={decisionDraft.title}
+                  onChange={event => setDecisionDraft(prev => ({ ...prev, title: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Decisão ou pendência"
+                />
+                <input
+                  value={decisionDraft.owner}
+                  onChange={event => setDecisionDraft(prev => ({ ...prev, owner: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Dono"
+                />
+                <input
+                  type="date"
+                  value={decisionDraft.dueDate}
+                  onChange={event => setDecisionDraft(prev => ({ ...prev, dueDate: event.target.value }))}
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                />
+                <FieldSelect
+                  label="Status"
+                  value={decisionDraft.status}
+                  options={DECISION_STATUSES}
+                  onChange={value => setDecisionDraft(prev => ({ ...prev, status: value }))}
+                />
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <textarea
+                  value={decisionDraft.impact}
+                  onChange={event => setDecisionDraft(prev => ({ ...prev, impact: event.target.value }))}
+                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Impacto se não decidir"
+                />
+                <textarea
+                  value={decisionDraft.evidence}
+                  onChange={event => setDecisionDraft(prev => ({ ...prev, evidence: event.target.value }))}
+                  className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  placeholder="Contexto/evidência"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={addDecision}
+                  className="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+                >
+                  Adicionar decisão
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100">
+              {decisions.length > 0 ? (
+                decisions.map(decision => (
+                  <article key={decision.id} className="grid gap-3 border-b border-gray-100 p-4 last:border-b-0">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_130px_150px_88px]">
+                      <input
+                        value={decision.title || ''}
+                        onChange={event => updateDecision(decision.id, { title: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <input
+                        value={decision.owner || ''}
+                        onChange={event => updateDecision(decision.id, { owner: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Dono"
+                      />
+                      <input
+                        type="date"
+                        value={decision.dueDate || ''}
+                        onChange={event => updateDecision(decision.id, { dueDate: event.target.value })}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+                      <FieldSelect
+                        label="Status"
+                        value={decision.status || 'Pendente'}
+                        options={DECISION_STATUSES}
+                        onChange={value => updateDecision(decision.id, { status: value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeDecision(decision.id)}
+                        className="rounded-md border border-red-100 bg-red-50 px-2 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <textarea
+                        value={decision.impact || ''}
+                        onChange={event => updateDecision(decision.id, { impact: event.target.value })}
+                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Impacto"
+                      />
+                      <textarea
+                        value={decision.evidence || ''}
+                        onChange={event => updateDecision(decision.id, { evidence: event.target.value })}
+                        className="min-h-20 resize-y rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        placeholder="Evidência"
+                      />
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="px-4 py-8 text-center text-sm text-gray-500">Nenhuma decisão registrada ainda.</p>
+              )}
             </div>
           </section>
 

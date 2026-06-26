@@ -2,9 +2,9 @@
 
 Ferramenta interna para conduzir entrevistas de mapeamento de processos com stakeholders de diferentes áreas.
 
-**Versão atual:** `v1.4.0`
+**Versão atual:** `v1.5.0`
 
-Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, aba PO para consolidar discoveries, backlog estruturado, exportação Markdown/CSV, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
+Esta versão transforma o app em um workspace mais executivo para Product Owners: biblioteca de perguntas, modo guiado ou manual do zero, aba PO para consolidar discoveries, score de maturidade, mapa AS-IS/TO-BE, decisões pendentes, backlog estruturado, exportação Markdown/CSV, autosave local, backup/importação em JSON, legendas por print, transcrição manual gratuita e exportação em PDF com prompt oculto para IA.
 
 ---
 
@@ -21,6 +21,9 @@ Esta versão transforma o app em um workspace mais executivo para Product Owners
 - **Backup e importação JSON** — exporte todas as entrevistas do navegador e restaure em outra sessão ou máquina
 - **Aba Entrevistas** — histórico completo com busca, edição e exclusão
 - **Aba PO** — consolida entrevistas por processo, registra análise PO e estrutura backlog priorizado
+- **Maturidade do discovery** — mostra lacunas antes de enviar a demanda para desenvolvimento
+- **Mapa AS-IS / TO-BE** — organiza etapa, ator, sistema, entrada, saída, problema e proposta
+- **Decisões e pendências** — registra dono, prazo, status, impacto e evidência
 - **Exportações PO** — gere documento de discovery em Markdown e backlog em CSV
 - **Sync gratuito opcional** — backup das entrevistas em Google Sheets via Apps Script
 - **Exportação em PDF com prompt oculto para IA** — o PDF fica limpo para leitura humana, mas mantém instruções internas para a IA

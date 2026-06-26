@@ -23,6 +23,7 @@ export const PRIORITIES = ['Alta', 'Média', 'Baixa']
 export const IMPACT_LEVELS = ['Alto', 'Médio', 'Baixo']
 export const EFFORT_LEVELS = ['Baixo', 'Médio', 'Alto']
 export const BACKLOG_STATUSES = ['Ideia', 'Refinar', 'Validar', 'Pronto', 'Descartado']
+export const DECISION_STATUSES = ['Pendente', 'Em validação', 'Decidida', 'Bloqueada']
 
 const LEVEL_SCORE = {
   Alto: 3,
@@ -101,6 +102,43 @@ export function getBacklogScore(item = {}) {
   const priority = LEVEL_SCORE[item.priority] || 0
   const effort = LEVEL_SCORE[item.effort] || 0
   return impact + priority - effort
+}
+
+export function calculateDiscoveryMaturity(group) {
+  const discovery = group?.discovery || {}
+  const analysis = discovery.analysis || {}
+  const backlog = discovery.backlog || []
+  const flowSteps = discovery.flowSteps || []
+  const decisions = discovery.decisions || []
+
+  const checks = [
+    ['Objetivo definido', discovery.objective],
+    ['Sistemas mapeados', discovery.systems],
+    ['Resumo executivo', analysis.executiveSummary],
+    ['Escopo e objetivo', analysis.scope],
+    ['Fluxo AS-IS descrito', analysis.asis],
+    ['Riscos e fragilidades', analysis.risks],
+    ['Oportunidades', analysis.opportunities],
+    ['Perguntas em aberto', analysis.openQuestions],
+    ['Handoff técnico', analysis.handoff],
+    ['Mapa AS-IS/TO-BE', flowSteps.length > 0],
+    ['Backlog estruturado', backlog.length > 0],
+    ['Evidência no backlog', backlog.some(item => item.evidence?.trim())],
+    ['Critérios de aceite', backlog.some(item => item.criteria?.trim())],
+    ['Decisões registradas', decisions.length > 0],
+  ]
+
+  const completed = checks.filter(([, value]) => Boolean(String(value || '').trim?.() || value === true)).length
+  const score = Math.round((completed / checks.length) * 100)
+
+  return {
+    score,
+    completed,
+    total: checks.length,
+    missing: checks
+      .filter(([, value]) => !Boolean(String(value || '').trim?.() || value === true))
+      .map(([label]) => label),
+  }
 }
 
 export function buildDiscoveryGroups(interviews = [], workspace = {}) {
@@ -191,6 +229,9 @@ export function buildDiscoveryMarkdown(group) {
   const analysis = discovery.analysis || {}
   const evidence = getDiscoveryEvidence(group.interviews)
   const backlog = [...(discovery.backlog || [])].sort((a, b) => getBacklogScore(b) - getBacklogScore(a))
+  const flowSteps = discovery.flowSteps || []
+  const decisions = discovery.decisions || []
+  const maturity = calculateDiscoveryMaturity(group)
   let out = `# ${discovery.title || group.title}\n\n`
 
   out += `## Visão geral\n\n`
@@ -200,10 +241,38 @@ export function buildDiscoveryMarkdown(group) {
   out += `- Sistemas: ${discovery.systems || '-'}\n`
   out += `- Entrevistas vinculadas: ${group.stats.interviewCount}\n`
   out += `- Progresso das entrevistas: ${group.stats.completion}%\n\n`
+  out += `- Maturidade do discovery: ${maturity.score}% (${maturity.completed}/${maturity.total})\n\n`
 
   ANALYSIS_FIELDS.forEach(([label, field]) => {
     out += `## ${label}\n\n${analysis[field]?.trim() || '-'}\n\n`
   })
+
+  out += `## Mapa AS-IS / TO-BE\n\n`
+  if (!flowSteps.length) {
+    out += `- Nenhuma etapa estruturada.\n\n`
+  } else {
+    out += `| Etapa | Ator | Sistema | Entrada | Ação AS-IS | Saída | Problema | TO-BE |\n`
+    out += `|---|---|---|---|---|---|---|---|\n`
+    flowSteps.forEach((step, index) => {
+      out += `| ${index + 1}. ${step.name || '-'} | ${step.actor || '-'} | ${step.system || '-'} | ${step.input || '-'} | ${step.action || '-'} | ${step.output || '-'} | ${step.problem || '-'} | ${step.tobe || '-'} |\n`
+    })
+    out += `\n`
+  }
+
+  out += `## Decisões pendentes\n\n`
+  if (!decisions.length) {
+    out += `- Nenhuma decisão registrada.\n\n`
+  } else {
+    decisions.forEach((decision, index) => {
+      out += `${index + 1}. ${decision.title || 'Decisão sem título'}\n`
+      out += `   - Dono: ${decision.owner || '-'}\n`
+      out += `   - Prazo: ${decision.dueDate || '-'}\n`
+      out += `   - Status: ${decision.status || '-'}\n`
+      out += `   - Impacto: ${decision.impact || '-'}\n`
+      out += `   - Evidência: ${decision.evidence || '-'}\n`
+    })
+    out += `\n`
+  }
 
   out += `## Backlog sugerido\n\n`
   if (!backlog.length) {

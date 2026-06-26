@@ -119,7 +119,7 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold leading-tight text-gray-950">Interview Mapper</p>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.4.0</span>
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">v1.5.0</span>
                 </div>
                 <p className="hidden text-xs text-gray-500 sm:block">Mapeamento de processos para Product Owners</p>
               </div>
